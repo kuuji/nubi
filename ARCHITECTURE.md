@@ -2,37 +2,39 @@
 
 **Nubi** (누비) — Korean quilting art. Layers stitched together into something stronger than the individual pieces.
 
-An agentic harness for orchestrating AI agent workflows with structured task decomposition, sandboxed execution, deterministic + agentic validation, code review, and full observability.
+An agentic harness for orchestrating AI agent workflows on Kubernetes. Structured task specs in, sandboxed execution, layered validation, and observable results out.
 
 ---
 
 ## Overview
 
-Nubi sits between human intent and agent execution. It takes a structured task spec, decomposes it, runs agents in isolated sandboxes, validates their output through layered gates (deterministic and agentic), reviews the work, and produces a human-readable summary of everything that happened.
+Nubi is a Kubernetes controller that turns a TaskSpec CRD into a pipeline of sandboxed agent work. Apply a spec, the controller creates an isolated namespace, runs agents as Jobs, gates their output through deterministic checks and agentic review, and reports everything back through the CRD status.
+
+The v1 pipeline for a simple task:
 
 ```
-Human → Orchestrator (produces spec)
-  → Nubi Harness (creates task namespace)
-    → Planner Agent: decomposes spec into sub-tasks
-    → Loop per sub-task:
-      → Executor Agent: does the work
-      → Validator Agent: checks correctness (deterministic + agentic)
-      → Reviewer Agent: checks quality (agentic)
-        → If issues: loop back to Executor (bounded)
-    → Monitorer Agent: observes full run, produces human summary
-  → Harness cleans up
-→ Results + summary returned to orchestrator
+kubectl apply TaskSpec
+  → Controller creates task namespace + branch
+  → Executor Agent (does the work, pushes to git branch)
+  → Deterministic Gates (lint, test, secret scan — code, not an agent)
+  → Reviewer Agent (read-only evaluation, approve/reject)
+    → If rejected: loop back to Executor (bounded)
+  → Summary call (one LLM call, not a pod)
+  → Done — branch becomes PR or gets cleaned up
 ```
+
+For complex tasks, the Planner is opt-in via `decomposition.allow: true`.
 
 ---
 
 ## Design Principles
 
 1. **Deterministic where possible, agentic where necessary.** Linters, tests, and dry-runs don't need a model. Intent-matching and quality judgment do. Layer both.
-2. **The spec is the contract.** Every layer reads from and validates against the same structured spec format. This makes the system composable and recursive.
+2. **The spec is the contract.** The TaskSpec CRD is the single source of truth. Every stage reads from it. There is no separate spec format — the CRD IS the spec.
 3. **Isolation is non-negotiable.** Agent code runs in gVisor-sandboxed containers with restricted permissions. Blast radius is contained by namespace.
-4. **Observability is built in, not bolted on.** Every agent action traces to Langfuse via OpenTelemetry. The monitorer turns traces into human narrative.
-5. **Bounded autonomy.** Agents can loop (reviewer → executor), but within defined limits. Escalate to humans, don't spiral.
+4. **Git is the workspace.** No PVCs, no shared volumes, no pod-to-pod communication. Git branches are the shared workspace. CRD status is the shared state.
+5. **Observability is built in, not bolted on.** Every agent action traces to Langfuse via OpenTelemetry. The summary call turns traces into human narrative.
+6. **Bounded autonomy.** Agents can loop (reviewer → executor), but within defined limits. Escalate to humans, don't spiral.
 
 ---
 
@@ -41,31 +43,153 @@ Human → Orchestrator (produces spec)
 | Component | Technology | Rationale |
 |---|---|---|
 | Agent Framework | [Strands Agents SDK](https://strandsagents.com/) (Python) | Model-driven, minimal orchestration overhead. Tools are Python functions. Built-in OTEL support. |
-| Observability | [Langfuse](https://langfuse.com/) (self-hosted) | Open source, OTEL-native, first-class Strands integration. Traces, costs, evals. Self-hosted on Postgres. |
+| Controller Framework | [kopf](https://kopf.readthedocs.io/) | Python K8s operator framework. Keeps the entire stack single-language (Python + Strands). Mature, production-tested. |
+| Observability | [Langfuse](https://langfuse.com/) (self-hosted) | Open source, OTEL-native, first-class Strands integration. Traces, costs, evals. |
 | Sandbox Runtime | [gVisor](https://gvisor.dev/) (`runsc`) | Syscall-level isolation via user-space kernel. K8s-native RuntimeClass. No hypervisor overhead. |
-| Execution Model | Kubernetes Jobs | Ephemeral, namespaced, auto-cleaned via TTL. Standard K8s primitives. |
-| Namespace Strategy | Per-task namespaces | Organizational boundary for observability, cleanup, and resource isolation. |
-| Container Orchestration | Kubernetes + ArgoCD | Existing cluster infrastructure. Declarative, GitOps-managed. |
-| Language | Python | Strands SDK is Python-first. Kubernetes client library is mature. |
-| Controller Framework | [kopf](https://kopf.readthedocs.io/) | Python K8s operator framework. Keeps the stack single-language. Mature, production-tested. |
+| Execution Model | Kubernetes Jobs | Ephemeral, namespaced, auto-cleaned via owner references. Standard K8s primitives. |
 | CRD | `TaskSpec` (`nubi.io/v1`) | The task spec IS the Custom Resource. Applied via `kubectl`, reconciled by the controller. |
+| Language | Python | Strands SDK is Python-first. kopf is Python. Single language across controller and agents. |
 
 ---
 
-## Kubernetes Controller Architecture
+## Git as Workspace
 
-Nubi is implemented as a **Kubernetes controller** (operator). The TaskSpec is a Custom Resource Definition (CRD), and the controller reconciles it through the pipeline stages.
+This is a critical design decision. There are no PVCs, no shared volumes, no pod-to-pod communication.
+
+**Git is the shared workspace.** Each task gets a branch (`nubi/{task-id}`). Each agent pod clones the branch, does its work, pushes. Local disk is `emptyDir` — ephemeral, gone when the pod dies.
+
+**CRD status is the shared state.** Metadata, decisions, phase transitions — all in the TaskSpec status subresource. Agents don't talk to each other. They read and write to git, and the controller watches Jobs and advances the pipeline.
+
+On completion, the branch either becomes a PR (if `output.format: pr`) or gets cleaned up.
+
+The status tracks workspace state:
+
+```yaml
+status:
+  phase: Reviewing
+  workspace:
+    repo: kuuji/some-app
+    branch: nubi/task-abc123
+    headSHA: "a1b2c3d"
+  stages:
+    executor:
+      status: complete
+      attempts: 1
+      commitSHA: "a1b2c3d"
+      summary: "Added rate limiting middleware"
+    validator:
+      status: complete
+      deterministic:
+        lint: passed
+        tests: passed
+      testCommitSHA: "d4e5f6g"
+    reviewer:
+      status: pending
+```
+
+Why this works:
+- **No coordination problems.** Agents are sequential — only one writes at a time.
+- **Full audit trail.** Every change is a commit. Every decision is in CRD status.
+- **Crash recovery is trivial.** Branch is durable. Pod dies, new pod clones the branch, picks up where things left off.
+- **Cleanup is simple.** Delete the branch. Delete the namespace. Done.
+
+---
+
+## Pipeline Stages
+
+### Agents and Roles
+
+| Role | What it does | Write access | Is a pod? |
+|---|---|---|---|
+| **Planner** | Decomposes complex tasks into sub-tasks | No (read-only) | Yes, but optional |
+| **Executor** | Does the work — writes code, configs, docs | Yes (git push) | Yes |
+| **Validator** | Writes tests and runs them to verify executor's work | Yes (git push — commits test suites) | Yes |
+| **Reviewer** | Read-only evaluation — quality, security, architecture fit | No (read-only) | Yes |
+| **Deterministic Gates** | Lint, type check, secret scan, etc. | No | **No** — code, not an agent |
+| **Monitorer** | Produces human-readable summary of the run | No | **No** — single LLM API call |
+
+The key distinction between Validator and Reviewer:
+- **Validator writes things.** It creates test suites — a creative act with write access. Its output is actual code in the codebase.
+- **Reviewer reads things.** It's a judgment call — read-only. Its output is approve/reject with feedback.
+
+### Stage 1: Planning (Optional)
+
+The Planner decomposes complex tasks into ordered sub-tasks. Skipped for simple tasks via `decomposition.allow: false` (the default).
+
+- **Tools:** file read, git log/diff, web search. Read-only.
+- **Output:** Execution plan — ordered list of sub-specs.
+
+### Stage 2: Execution
+
+The Executor runs inside a gVisor-sandboxed pod. Clones the task branch, does the work, pushes.
+
+- **Tools (configurable per spec):** shell, file read/write, git, web search, HTTP requests (scoped by NetworkPolicy).
+- **Output:** Commits on the task branch + structured result in CRD status.
+
+### Stage 3: Deterministic Gates
+
+Not an agent. Code that runs fast-fail checks before any agentic review:
+
+- Linting (ruff, eslint)
+- Type checking (mypy, tsc)
+- Test execution (pytest, jest)
+- Secret scanning (trufflehog, gitleaks)
+- Diff size checks
+- Custom commands from spec
+
+If any gate fails, the executor retries with the failure output as feedback. No LLM call needed — this is pure code.
+
+### Stage 4: Validation
+
+The Validator writes tests to verify the executor's work, then runs them. This is the Tester from Forge — its output is an actual test suite committed to the branch.
+
+- **Tools:** file read/write, git, shell (for running tests). Has write access.
+- **Output:** Test suite committed to the branch + pass/fail with details.
+
+### Stage 5: Review
+
+The Reviewer does a PR-style evaluation. Different question than validation — not "is this correct?" but "is this good?"
+
+- Code quality, readability, duplication
+- Architecture fit — does this align with the project's patterns?
+- Security, performance, maintainability
+- Gaps — anything the spec asked for that's missing?
+
+**Tools:** file read, git diff/log. Read-only.
+**Output:** Approve or reject with feedback. Rejection loops back to the executor (bounded by `loop_policy.max_retries`).
+
+### Stage 6: Summary
+
+Not a pod. The controller collects structured data from CRD status + Langfuse traces and makes one LLM API call to produce a human-readable narrative:
+
+- What was the task?
+- What did the executor do? What decisions did it make?
+- What did gates/validation catch? What did review flag?
+- How many loops? What was fixed?
+- Final state + Langfuse trace link.
+
+### Loop Resolution
+
+```
+Deterministic gate fails → Executor retries with failure output
+Validator fails          → Executor retries with test failures
+Reviewer rejects         → Executor retries with review feedback
+Max retries exceeded     → Escalate to human (or abandon, per spec)
+```
+
+---
+
+## Kubernetes Controller
 
 ### Why a Controller?
 
-The pipeline we're building is inherently Kubernetes-native — namespaces, Jobs, NetworkPolicies, ResourceQuotas, cleanup. Rather than wrapping all of this in a Python CLI that shells out to kubectl, the controller approach makes the pipeline a first-class Kubernetes citizen:
+The pipeline is inherently Kubernetes-native — namespaces, Jobs, NetworkPolicies, ResourceQuotas, cleanup. The controller approach makes it a first-class K8s citizen:
 
-- **Declarative lifecycle** — the controller reconciles desired state, retries on failure, handles pod crashes automatically. No manual retry logic.
-- **Native status** — `kubectl describe taskspec my-task` shows exactly where things are: phase, sub-tasks, which agent is running, last error.
-- **GitOps for free** — commit a TaskSpec YAML to a repo, ArgoCD applies it. Scheduled tasks, repeatable workflows, version-controlled specs.
-- **Crash recovery** — controller restarts, reads CRD state from etcd, picks up where it left off. Stateless by design.
-- **Watch semantics** — event-driven, not polling. Controller watches Job status changes and reacts.
-- **Concurrency** — multiple TaskSpecs in flight, handled naturally via work queue and rate limiting (built into controller-runtime/kopf).
+- **Declarative lifecycle** — reconciles desired state, handles failures automatically.
+- **Native status** — `kubectl describe taskspec my-task` shows exactly where things are.
+- **GitOps** — commit a TaskSpec YAML to a repo, ArgoCD applies it.
+- **Crash recovery** — controller restarts, reads CRD state from etcd, picks up where it left off.
+- **Event-driven** — watches Job completions, not polling.
 
 ### CRD: TaskSpec
 
@@ -110,7 +234,7 @@ spec:
       labels: [nubi, automated]
       draft: true
   decomposition:
-    allow: true
+    allow: false
     max_depth: 2
     max_subtasks: 5
   monitoring:
@@ -120,675 +244,143 @@ spec:
         target: "<channel-id>"
 ```
 
-### Status Subresource
+### Event-Driven Reconciliation
 
-The status subresource tracks the full pipeline state:
-
-```yaml
-status:
-  phase: Reviewing
-  startedAt: "2026-04-03T16:00:00Z"
-  planResult:
-    subtasks: 3
-    parallel: [task-1, task-2]
-    sequential: [task-3]
-  subtasks:
-    - name: task-1
-      phase: Complete
-      executor:
-        attempts: 1
-        podName: nubi-abc123-exec-1
-      validation:
-        deterministic: passed
-        agentic: passed
-      review: approved
-    - name: task-2
-      phase: Validating
-      executor:
-        attempts: 2
-        lastFeedback: "Missing error handling for 404 responses"
-  currentNamespace: nubi-abc123
-  langfuseTraceId: "trace-xyz"
-  estimatedCost: "$0.47"
-  conditions:
-    - type: PlanComplete
-      status: "True"
-      lastTransitionTime: "2026-04-03T16:01:00Z"
-    - type: ExecutionComplete
-      status: "False"
-    - type: Escalated
-      status: "False"
-```
-
-### Reconciliation Loop
-
-The controller's reconcile function maps directly to the pipeline:
-
-```
-Observe CRD →
-  Phase=Pending    → Create task namespace, spawn planner pod  → Phase=Planning
-  Phase=Planning   → Watch planner pod complete                → Phase=Executing
-  Phase=Executing  → Spawn executor job(s) per sub-task        → Phase=Validating
-  Phase=Validating → Run deterministic gates, then agentic     → Pass: Phase=Reviewing
-                                                                 Fail: back to Executing (bounded)
-  Phase=Reviewing  → Spawn reviewer pod                        → Approved: Phase=Monitoring
-                                                                 Changes: back to Executing (bounded)
-  Phase=Monitoring → Spawn monitorer pod, produce summary      → Phase=Complete
-  Phase=Complete   → Start TTL countdown for namespace cleanup
-  Phase=Escalated  → Notify human, hold for intervention
-  Phase=Failed     → Retain namespace for debugging
-```
-
-Each phase transition updates the CRD status and emits a Kubernetes event, making the full pipeline observable via standard K8s tooling.
-
-### Controller Implementation (kopf)
-
-We use [kopf](https://kopf.readthedocs.io/) — a Python operator framework — to keep the entire stack in one language (Python + Strands SDK).
+The controller does NOT watch `status.phase` (self-trigger footgun) and does NOT poll on a timer. It uses the standard Kubernetes controller pattern: watch secondary resources (Jobs).
 
 ```python
-import kopf
-from nubi.harness import create_task_namespace, spawn_agent_pod
-from nubi.spec import parse_taskspec
-
+# Primary: react to new TaskSpecs
 @kopf.on.create('nubi.io', 'v1', 'taskspecs')
-async def on_create(spec, name, namespace, status, patch, **kwargs):
-    """New TaskSpec applied — start the pipeline."""
-    task = parse_taskspec(spec)
-    ns = await create_task_namespace(task)
-    patch.status['phase'] = 'Planning'
-    patch.status['currentNamespace'] = ns
-    await spawn_agent_pod(ns, 'planner', task)
+async def on_taskspec_created(spec, name, patch, **kwargs):
+    ns = create_task_namespace(name)
+    spawn_executor_job(ns, spec, owner_ref=name)
+    patch.status['phase'] = 'Executing'
 
-@kopf.on.field('nubi.io', 'v1', 'taskspecs', field='status.phase')
-async def on_phase_change(old, new, spec, name, patch, **kwargs):
-    """React to phase transitions."""
-    task = parse_taskspec(spec)
-    if new == 'Executing':
-        await spawn_executors(task, patch)
-    elif new == 'Validating':
-        await run_validation(task, patch)
-    elif new == 'Reviewing':
-        await spawn_reviewer(task, patch)
-    elif new == 'Monitoring':
-        await spawn_monitorer(task, patch)
-    elif new == 'Complete':
-        await schedule_cleanup(task, patch)
+# Secondary: react to Job completions
+@kopf.on.field('batch', 'v1', 'jobs', field='status.conditions',
+               labels={'nubi.io/task-id': kopf.PRESENT})
+async def on_job_status_change(name, namespace, status, labels, **kwargs):
+    task_id = labels['nubi.io/task-id']
+    stage = labels['nubi.io/stage']
+    if job_succeeded(status):
+        advance_phase(task_id, stage)
+    elif job_failed(status):
+        handle_failure(task_id, stage)
 ```
 
-### Deployment
-
-The controller runs as a Deployment in `nubi-system` namespace:
+Every Job gets labels and owner references:
 
 ```yaml
-apiVersion: apps/v1
-kind: Deployment
 metadata:
-  name: nubi-controller
-  namespace: nubi-system
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: nubi-controller
-  template:
-    spec:
-      serviceAccountName: nubi-controller
-      containers:
-        - name: controller
-          image: ghcr.io/kuuji/nubi-controller:latest
-          env:
-            - name: LANGFUSE_PUBLIC_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: nubi-secrets
-                  key: langfuse-public-key
+  labels:
+    nubi.io/task-id: "abc123"
+    nubi.io/stage: "executor"
+  ownerReferences:
+    - apiVersion: nubi.io/v1
+      kind: TaskSpec
+      name: add-rate-limiting
 ```
 
-The controller's ServiceAccount has RBAC permissions to:
-- Create/delete namespaces (prefixed `nubi-*`)
-- Create/read/delete Jobs, Pods, ConfigMaps, Secrets in `nubi-*` namespaces
-- Create/read NetworkPolicies and ResourceQuotas
-- Read/update TaskSpec CRDs
+Owner references give garbage collection for free — delete the TaskSpec, all Jobs and their pods get cleaned up automatically.
 
-### Usage
+### Crash Recovery
 
-```bash
-# Apply a task
-kubectl apply -f task.yaml
+Inherently solved by the event-driven pattern:
 
-# Watch pipeline progress
-kubectl get taskspecs -w
+- **Idempotent handlers:** Check before creating — "ensure X exists" not "create X". Don't spawn duplicate Jobs.
+- **Resume on restart:** kopf's `on.resume` replays all unfinished TaskSpecs when the controller comes back up.
+- **Missed events:** Completed Jobs that were missed during downtime get picked up on re-watch.
 
-# Detailed status
-kubectl describe taskspec add-rate-limiting
+No special crash recovery logic needed. The pattern handles it.
 
-# View agent pod logs
-kubectl logs -n nubi-abc123 nubi-abc123-exec-1
+### Credential Scoping
 
-# GitOps: commit specs to a repo, ArgoCD applies them
-# Cron: use a CronJob that creates TaskSpec resources on schedule
-```
+The controller creates a Secret in the task namespace at spawn time with only the credentials that stage needs:
 
----
+| Stage | GitHub Token | LLM API Key |
+|---|---|---|
+| Executor | ✓ | ✓ |
+| Validator | ✓ | ✓ |
+| Reviewer | ✗ (read-only, no git push) | ✓ |
+| Deterministic Gates | ✗ | ✗ (just runs tools) |
 
-## Pipeline Stages
-
-### Stage 1: Spec Production
-
-The orchestrator (e.g., OpenClaw agent using a harness skill) translates human intent into a structured task spec. The spec defines what needs to be done, what constraints apply, and how to validate success.
-
-The spec is the single source of truth for the entire pipeline. See [Task Spec Format](#task-spec-format) below.
-
-### Stage 2: Planning
-
-The **Planner Agent** receives the spec and decides how to approach it:
-
-- **Simple tasks**: pass through directly to execution (no decomposition needed)
-- **Complex tasks**: break into ordered sub-tasks, each with its own mini-spec
-- **Dependency mapping**: which sub-tasks can run in parallel, which are sequential
-
-The planner does NOT execute. It produces an execution plan — an ordered list of sub-specs.
-
-**Tools available:** File read, git log/diff, web search (for research context).
-**Tools NOT available:** File write, shell execution, git push. Read-only.
-
-### Stage 3: Execution
-
-The **Executor Agent** runs inside a gVisor-sandboxed pod in the task namespace. One executor per sub-task.
-
-**Tools available (configurable per spec):**
-- `shell`: Run commands in the sandbox
-- `file_read` / `file_write`: Filesystem access within the workspace
-- `git`: Clone, branch, commit, push
-- `web_search`: Research (if network access is granted)
-- `http_request`: API calls (scoped by NetworkPolicy to allowed hosts)
-
-**What the executor produces:**
-- Code changes (as a git branch/patch)
-- Files (research output, configs, etc.)
-- Structured result object (status, summary, files changed, decisions made)
-
-### Stage 4: Validation
-
-The **Validator** runs in two layers:
-
-**Layer 1 — Deterministic (runs first, fast-fails):**
-- Linting (ruff, eslint, etc.)
-- Type checking (mypy, tsc)
-- Test execution (pytest, jest)
-- Dry-run commands (`kubectl apply --dry-run`, `terraform plan`)
-- Diff size checks (reject >N lines changed)
-- Secret scanning (trufflehog, gitleaks)
-- Custom checks defined in the spec
-
-**Layer 2 — Agentic (runs only if deterministic checks pass):**
-- Intent matching: "Does this implementation actually solve what the spec asked for?"
-- Completeness: "Are there edge cases or requirements the executor missed?"
-- Regression risk: "Could this change break existing functionality?"
-
-**Tools available:** File read, git diff, test output logs. Read-only access to executor's workspace.
-
-**Output:** Pass/fail with detailed reasoning. On failure, produces actionable feedback for the executor.
-
-### Stage 5: Review
-
-The **Reviewer Agent** asks a different question than the validator: not "is this correct?" but "is this *good*?"
-
-- Code quality: readability, duplication, naming, structure
-- Architecture fit: does this align with the project's patterns?
-- API contract impact: will this break consumers?
-- Performance: obvious inefficiencies, N+1 queries, unnecessary allocations
-- Maintainability: will someone understand this in 6 months?
-
-**Tools available:** File read, git diff/log, project documentation. Read-only.
-
-**Output:** Approved, approved-with-comments, or request-changes (with specific feedback).
-
-### Stage 6: Loop Resolution
-
-When validation or review fails:
-
-```
-Validator fails → Executor retries with feedback
-Reviewer requests changes → Executor retries with feedback
-Max retries exceeded → Escalate to human
-```
-
-Loop policy is defined in the spec:
-- `max_retries`: How many executor retries before escalation (default: 2)
-- `validator_to_executor`: Allow validator to trigger re-execution (default: true)
-- `reviewer_to_executor`: Allow reviewer to trigger re-execution (default: true)
-- `reviewer_to_planner`: Allow reviewer to trigger re-planning (default: false — too expensive)
-- `on_max_retries`: `escalate` or `abandon`
-
-### Stage 7: Monitoring
-
-The **Monitorer Agent** observes the entire pipeline run and produces a human-readable summary:
-
-- What was the task?
-- How was it decomposed?
-- What did each executor do? What decisions did it make?
-- What did validation catch? What did review flag?
-- How many loops occurred? What was fixed?
-- What's the final state?
-- Langfuse trace link for drill-down
-
-**Inputs:** Langfuse traces, agent logs, spec, all stage outputs.
-**Output:** Structured report (markdown) + optional Langfuse annotations.
-
-The monitorer is the human's window into the system. Without it, understanding what happened requires reading raw traces.
-
----
-
-## Task Spec Format
-
-The spec is YAML-based. It's the contract between all pipeline stages.
-
-```yaml
-apiVersion: nubi/v1
-kind: TaskSpec
-
-metadata:
-  id: <uuid>               # Auto-generated
-  name: "human-readable"   # Short description
-  created: <iso-timestamp>
-  source: openclaw | cli | api
-
-task:
-  description: |
-    Multi-line description of what needs to be done.
-    Be specific about desired outcome.
-  type: code-change | research | infra | investigation | refactor
-  priority: low | normal | high | critical
-
-inputs:
-  repo: kuuji/some-repo          # GitHub repo (optional)
-  branch: main                    # Base branch
-  working_branch: nubi/<task-id>  # Auto-generated
-  files_of_interest:              # Hint to planner/executor
-    - path/to/relevant/file.py
-    - docs/architecture.md
-  context: |                      # Additional context
-    Free-form text the orchestrator adds.
-  artifacts:                      # Input files/data
-    - name: requirements.txt
-      content: <inline or path>
-
-constraints:
-  timeout: 300s                   # Per sub-task timeout
-  total_timeout: 1800s            # Entire pipeline timeout
-  max_tokens: 50000               # Token budget per agent invocation
-  network_access:                 # Allowed egress (deny-all by default)
-    - github.com
-    - registry.k8s.io
-    - pypi.org
-  tools:                          # Tools available to executor
-    - shell
-    - git
-    - file_read
-    - file_write
-    - web_search
-  resources:                      # Per-pod resource limits
-    cpu: "1"
-    memory: 512Mi
-
-validation:
-  deterministic:                  # Fast-fail checks
-    - lint
-    - type_check
-    - test
-    - secret_scan
-    - diff_size:
-        max_lines: 500
-    - custom:
-        command: "make validate"
-        expected_exit: 0
-  agentic:                        # Model-based checks
-    - intent_match
-    - completeness
-    - regression_risk
-
-review:
-  enabled: true
-  focus:                          # What the reviewer should emphasize
-    - code_quality
-    - architecture_fit
-    - api_contract
-
-loop_policy:
-  max_retries: 2
-  validator_to_executor: true
-  reviewer_to_executor: true
-  reviewer_to_planner: false
-  on_max_retries: escalate       # escalate | abandon
-
-output:
-  format: pr | patch | files | report
-  destination: github | local     # Where results go
-  pr:                             # If format is pr
-    title_prefix: "nubi:"
-    labels: [nubi, automated]
-    draft: true
-
-decomposition:
-  allow: true                     # Planner can decompose
-  max_depth: 2                    # Max recursion depth
-  max_subtasks: 5                 # Prevent over-decomposition
-
-monitoring:
-  langfuse_project: nubi
-  trace_tags:
-    - <task-id>
-    - <task-type>
-  summary: true                   # Generate monitorer summary
-  notify:                         # Where to send the summary
-    - channel: discord
-      target: <channel-id>
-    - channel: telegram
-      target: <chat-id>
-```
-
-### Spec Recursion
-
-When the planner decomposes a task, it produces child specs that inherit from the parent:
-
-- Child specs inherit `constraints`, `validation`, and `loop_policy` unless overridden
-- Child specs get their own `metadata.id` and are linked to the parent via `metadata.parent_id`
-- The harness enforces `decomposition.max_depth` to prevent infinite recursion
+Least-privilege per stage. The reviewer can't push to git. The gates don't need credentials at all.
 
 ---
 
 ## Agent Definitions
 
-Each agent is a Strands Agent with a specific system prompt and tool set.
+Each agent is a Strands Agent with a specific system prompt and tool set. Single container image (`ghcr.io/kuuji/nubi-agent:latest`) with tool availability controlled by environment variables at spawn time.
 
 ### Planner
 
 ```
-Role: Decompose tasks into actionable sub-tasks.
-System prompt: Task decomposition specialist. Read the spec, analyze the
-  codebase structure, and break the work into ordered, independent sub-tasks.
-  Each sub-task should be completable by a single executor in one session.
+Role: Decompose complex tasks into actionable sub-tasks.
 Tools: file_read, git_log, git_diff, web_search
-Isolation: Standard container (no gVisor needed — read-only operations)
+Isolation: Standard container (read-only operations)
+When: Only when decomposition.allow: true in the spec
 ```
 
 ### Executor
 
 ```
 Role: Implement the task.
-System prompt: Software engineer. Implement exactly what the spec describes.
-  Follow existing patterns in the codebase. Write clean, tested code.
-  Document your decisions.
 Tools: shell, file_read, file_write, git, web_search, http_request (scoped)
 Isolation: gVisor sandbox, restricted PSS, scoped NetworkPolicy
+Credentials: GitHub token + LLM API key
 ```
 
 ### Validator
 
 ```
-Role: Verify correctness — deterministic and agentic.
-System prompt: Quality assurance engineer. Run all deterministic checks first.
-  If they pass, evaluate whether the implementation matches the spec's intent.
-  Be thorough but fair. Provide actionable feedback on failures.
-Tools: file_read, git_diff, shell (read-only commands: lint, test, etc.)
-Isolation: gVisor sandbox, read-only filesystem access to executor workspace
+Role: Write tests to verify the executor's work, then run them.
+Tools: file_read, file_write, git, shell
+Isolation: gVisor sandbox
+Credentials: GitHub token + LLM API key
 ```
 
 ### Reviewer
 
 ```
-Role: Evaluate quality and fitness.
-System prompt: Senior engineer doing code review. The code already passes
-  tests and validation. Your job is to assess quality, architecture fit,
-  maintainability, and potential issues. Approve, comment, or request changes.
-Tools: file_read, git_diff, git_log, project_docs
-Isolation: Standard container (read-only operations)
-```
-
-### Monitorer
-
-```
-Role: Observe and summarize the entire pipeline run.
-System prompt: Technical writer and observer. You have access to everything
-  that happened during this pipeline run. Produce a clear, concise summary
-  for the human operator. Include what was done, what was caught and fixed,
-  any concerns, and the final state.
-Tools: langfuse_traces, file_read, stage_outputs
+Role: Read-only evaluation — quality, architecture fit, security, gaps.
+Tools: file_read, git_diff, git_log
 Isolation: Standard container (read-only)
+Credentials: LLM API key only (no git push)
+Output: approve or reject with feedback
 ```
-
----
-
-## Infrastructure
-
-### Cluster Requirements
-
-- Kubernetes cluster with gVisor support (runsc installed on nodes)
-- containerd configured with gVisor runtime
-- NetworkPolicy support (Calico, Cilium, or similar CNI)
-- Persistent storage for Langfuse (Postgres)
-
-### Namespace Lifecycle
-
-Each task gets its own namespace:
-
-```
-nubi-{task-id-short}
-```
-
-**Creation:**
-1. Namespace with labels: `nubi.task-id`, `nubi.task-type`, `pod-security.kubernetes.io/enforce: restricted`
-2. gVisor RuntimeClass reference
-3. ResourceQuota (from spec constraints)
-4. NetworkPolicy (deny-all + specific egress from spec)
-5. ServiceAccount with minimal RBAC
-
-**Cleanup:**
-- On success: namespace deleted after configurable TTL (default: 1 hour, for debugging)
-- On failure: namespace retained for investigation (configurable)
-- Garbage collector: CronJob that cleans namespaces older than 24 hours
-
-### Langfuse Deployment
-
-Self-hosted Langfuse on the cluster:
-- Postgres database (dedicated or shared)
-- Langfuse web UI + API
-- OTEL collector endpoint for Strands agents
-- Accessible via `langfuse.lab.byeon.ca` (Traefik ingress)
-
-### Container Images
-
-Base images for agent pods:
-
-```
-ghcr.io/kuuji/nubi-executor:latest    # Python + Strands + build tools + git
-ghcr.io/kuuji/nubi-planner:latest     # Python + Strands + read-only tools
-ghcr.io/kuuji/nubi-validator:latest   # Python + Strands + linters + test runners
-ghcr.io/kuuji/nubi-reviewer:latest    # Python + Strands + read-only tools
-ghcr.io/kuuji/nubi-monitorer:latest   # Python + Strands + Langfuse client
-```
-
-Or: a single `ghcr.io/kuuji/nubi-agent:latest` image with tool availability controlled by the entrypoint/config. Simpler to maintain, slightly larger image.
-
----
-
-## Repo Structure
-
-```
-kuuji/nubi/
-├── ARCHITECTURE.md              # This file
-├── README.md                    # Quick start, usage
-├── pyproject.toml               # Python project config
-├── src/
-│   └── nubi/
-│       ├── __init__.py
-│       ├── controller/
-│       │   ├── __init__.py
-│       │   ├── handlers.py      # kopf handlers (on.create, on.field, on.timer)
-│       │   ├── reconcile.py     # Phase-based reconciliation logic
-│       │   ├── namespace.py     # Task namespace lifecycle (create, cleanup, GC)
-│       │   ├── sandbox.py       # gVisor job creation/management
-│       │   └── phases.py        # Phase transition logic and loop resolution
-│       ├── crd/
-│       │   ├── __init__.py
-│       │   ├── schema.py        # TaskSpec CRD schema (Pydantic models)
-│       │   └── defaults.py      # Default values, spec inheritance for child tasks
-│       ├── agents/
-│       │   ├── __init__.py
-│       │   ├── base.py          # Base Strands agent factory
-│       │   ├── planner.py       # Planner agent definition
-│       │   ├── executor.py      # Executor agent definition
-│       │   ├── validator.py     # Validator agent definition
-│       │   ├── reviewer.py      # Reviewer agent definition
-│       │   └── monitorer.py     # Monitorer agent definition
-│       ├── tools/
-│       │   ├── __init__.py
-│       │   ├── shell.py         # Sandboxed shell execution
-│       │   ├── git.py           # Git operations
-│       │   ├── files.py         # File read/write
-│       │   ├── web.py           # Web search, HTTP requests
-│       │   └── langfuse.py      # Langfuse trace querying
-│       ├── validation/
-│       │   ├── __init__.py
-│       │   ├── deterministic.py # Lint, test, secret scan runners
-│       │   └── gates.py         # Gate definitions, registry
-│       └── output/
-│           ├── __init__.py
-│           ├── pr.py            # GitHub PR creation
-│           ├── report.py        # Markdown report generation
-│           └── notify.py        # Discord/Telegram/webhook notification
-├── prompts/                     # Agent system prompts (markdown)
-│   ├── planner.md
-│   ├── executor.md
-│   ├── validator.md
-│   ├── reviewer.md
-│   └── monitorer.md
-├── examples/                    # Example TaskSpec CRDs
-│   ├── code-change.yaml
-│   ├── research.yaml
-│   ├── infra.yaml
-│   └── investigation.yaml
-├── charts/                      # Helm chart for controller + infra
-│   └── nubi/
-│       ├── Chart.yaml
-│       ├── values.yaml
-│       ├── crds/
-│       │   └── taskspec-crd.yaml
-│       └── templates/
-│           ├── deployment.yaml  # Controller deployment
-│           ├── rbac.yaml        # ServiceAccount, ClusterRole, bindings
-│           ├── runtimeclass.yaml # gVisor RuntimeClass
-│           └── namespace.yaml   # nubi-system namespace
-├── images/                      # Dockerfiles
-│   ├── controller/
-│   │   └── Dockerfile           # Controller image (kopf + nubi package)
-│   └── agent/
-│       └── Dockerfile           # Unified agent image (Strands + tools)
-├── tests/
-│   ├── test_crd.py              # CRD schema validation
-│   ├── test_reconcile.py        # Reconciliation logic
-│   ├── test_phases.py           # Phase transitions
-│   └── test_agents.py           # Agent behavior
-└── hack/                        # Dev scripts
-    ├── install-crd.sh           # Quick CRD install for dev
-    └── run-local.sh             # Run controller locally against cluster
-```
-
----
-
-## Integration Points
-
-### OpenClaw (Primary Orchestrator)
-
-A **nubi skill** in OpenClaw translates human intent into task specs and submits them to the harness:
-
-```
-User: "Add rate limiting to the API endpoints in kuuji/some-app"
-  → OpenClaw agent reads nubi skill
-  → Produces TaskSpec YAML
-  → Calls nubi harness (API, CLI, or direct Python invocation)
-  → Harness runs the pipeline
-  → Monitorer summary relayed to user
-```
-
-The skill can also be used by the Strands executor itself when it needs to decompose — same spec format, recursive invocation.
-
-### kubectl (Native CLI)
-
-No custom CLI needed — kubectl IS the CLI:
-
-```bash
-# Submit a task
-kubectl apply -f task.yaml
-
-# Watch pipeline progress
-kubectl get taskspecs -w
-
-# Detailed status with phase, sub-tasks, costs
-kubectl describe taskspec add-rate-limiting
-
-# View agent logs
-kubectl logs -n nubi-abc123 nubi-abc123-exec-1
-
-# Cancel a running task
-kubectl delete taskspec add-rate-limiting
-
-# List all active tasks
-kubectl get taskspecs -o wide
-```
-
-### GitOps
-
-TaskSpec YAMLs can live in a git repo. ArgoCD applies them, the controller reconciles. This enables:
-- **Scheduled tasks**: CronJobs that create TaskSpec resources
-- **Repeatable workflows**: same spec, different inputs
-- **Audit trail**: git history shows what was requested, when, by whom
-
-### API (Future)
-
-Kubernetes API server IS the API. Any K8s client library can create/read/watch TaskSpecs programmatically. For convenience, a thin REST wrapper could expose:
-- Task submission without kubeconfig
-- Webhook receivers (trigger from GitHub events, CI, etc.)
-- Simplified status for UIs
 
 ---
 
 ## Security Model
 
-### Sandbox Security (gVisor)
+### gVisor Sandboxing
 
-- **Syscall filtering**: gVisor intercepts all syscalls in user space. Agent code never directly touches the host kernel.
-- **Restricted PSS**: No privilege escalation, no host mounts, read-only root filesystem, non-root user.
-- **NetworkPolicy**: Deny-all default. Egress explicitly allowed per spec (e.g., `github.com`, `pypi.org`).
-- **Resource limits**: CPU and memory caps per pod, enforced by ResourceQuota.
-- **Timeout enforcement**: `activeDeadlineSeconds` on Jobs — hard kill if exceeded.
-
-### Credential Management
-
-- Agents receive credentials via Kubernetes Secrets mounted as environment variables
-- Only the credentials needed for the task (e.g., GitHub token for code changes)
-- No access to cluster-wide secrets or the harness's own credentials
-- Future: network-layer credential injection (microsandbox pattern) when tooling matures
+- **Syscall filtering:** gVisor intercepts all syscalls in user space. Agent code never directly touches the host kernel.
+- **Restricted PSS:** No privilege escalation, no host mounts, read-only root filesystem, non-root user.
+- **NetworkPolicy:** Deny-all default. Egress explicitly allowed per spec (e.g., `github.com`, `pypi.org`).
+- **Resource limits:** CPU and memory caps per pod, enforced by ResourceQuota.
+- **Timeout enforcement:** `activeDeadlineSeconds` on Jobs — hard kill if exceeded.
 
 ### Trust Boundaries
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ Harness Runner (trusted)                                │
+│ Controller (trusted)                                    │
 │  - Creates namespaces, manages lifecycle                │
 │  - Has cluster RBAC for namespace/job management        │
-│  - Runs outside sandbox                                 │
+│  - Runs outside sandbox in nubi-system                  │
 │                                                         │
 │  ┌───────────────────────────────────────────────────┐  │
 │  │ Task Namespace (partially trusted)                │  │
+│  │  - ResourceQuota, NetworkPolicy enforced          │  │
+│  │  - Scoped credentials per stage                   │  │
 │  │                                                   │  │
 │  │  ┌─────────────────────────────────────────────┐  │  │
 │  │  │ Agent Pod (untrusted code execution)        │  │  │
 │  │  │  - gVisor runtime                          │  │  │
 │  │  │  - Restricted PSS                          │  │  │
-│  │  │  - Scoped NetworkPolicy                    │  │  │
-│  │  │  - Resource limits                         │  │  │
+│  │  │  - emptyDir workspace (ephemeral)          │  │  │
+│  │  │  - Git clone → work → push                 │  │  │
 │  │  └─────────────────────────────────────────────┘  │  │
 │  └───────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
@@ -796,13 +388,205 @@ Kubernetes API server IS the API. Any K8s client library can create/read/watch T
 
 ---
 
+## Namespace Lifecycle
+
+Each task gets its own namespace: `nubi-{task-id-short}`
+
+**Creation:**
+1. Namespace with labels (`nubi.io/task-id`, `nubi.io/task-type`) and `pod-security.kubernetes.io/enforce: restricted`
+2. gVisor RuntimeClass reference
+3. ResourceQuota from spec constraints
+4. NetworkPolicy (deny-all + specific egress from spec)
+5. Scoped credentials Secret
+
+**Cleanup:**
+- Success: namespace deleted after configurable TTL (default: 1 hour, for debugging)
+- Failure: namespace retained for investigation (configurable)
+- Owner references on Jobs/Secrets mean deleting the namespace cascades everything
+
+---
+
+## Versioned Rollout
+
+Each version is independently usable. v0.1 ships something real. Each subsequent version adds quality.
+
+### v0.1 — Executor Only
+
+```
+kubectl apply TaskSpec
+  → Controller creates namespace + git branch
+  → Spawns executor pod
+  → Executor does work, pushes to branch
+  → Controller reports result in CRD status
+```
+
+This is the MVP. A single agent doing work in a sandbox, tracked by a CRD. No validation, no review — just execution.
+
+### v0.2 — Deterministic Gates
+
+After the executor, run lint/test/secret-scan as code (not an agent). Fast-fail before any agentic evaluation. Gate failures loop back to the executor with the output.
+
+### v0.3 — Validator
+
+After the executor passes gates, the Validator writes tests and runs them. Its output is an actual test suite committed to the branch.
+
+### v0.4 — Reviewer
+
+After validation, the Reviewer evaluates quality — architecture fit, code quality, gaps. Can loop back to the executor with feedback.
+
+### v0.5 — Planner
+
+For complex tasks, the Planner decomposes before executing. Opt-in via `decomposition.allow: true`.
+
+### v0.6 — Monitorer
+
+Summary call at the end. Controller collects CRD status + Langfuse traces, makes one LLM API call to produce a human-readable narrative. Not a pod.
+
+---
+
+## Minimal Viable Deployment (v0.1)
+
+What you need to run v0.1:
+
+1. **gVisor on cluster nodes** — `runsc` installed, containerd configured with the gVisor runtime handler.
+2. **gVisor RuntimeClass** applied:
+   ```yaml
+   apiVersion: node.k8s.io/v1
+   kind: RuntimeClass
+   metadata:
+     name: gvisor
+   handler: runsc
+   ```
+3. **`nubi-system` namespace** created.
+4. **TaskSpec CRD** applied.
+5. **Controller Deployment** in `nubi-system`.
+6. **One Secret** with credentials:
+   ```yaml
+   apiVersion: v1
+   kind: Secret
+   metadata:
+     name: nubi-credentials
+     namespace: nubi-system
+   type: Opaque
+   stringData:
+     github-token: <GitHub PAT>
+     llm-api-key: <Anthropic/OpenAI API key>
+   ```
+
+That's it. No Langfuse, no complex RBAC, no Helm chart. Apply the CRD, deploy the controller, create a Secret with creds. Start submitting TaskSpecs.
+
+Langfuse, Helm packaging, and advanced RBAC come later as the pipeline matures.
+
+---
+
+## Integration Points
+
+### OpenClaw (Primary Orchestrator)
+
+A **nubi skill** in OpenClaw translates human intent into TaskSpec CRDs:
+
+```
+User: "Add rate limiting to the API in kuuji/some-app"
+  → OpenClaw agent reads nubi skill
+  → Produces TaskSpec YAML
+  → kubectl apply (or K8s API call)
+  → Controller runs the pipeline
+  → Summary relayed to user
+```
+
+### kubectl (Native CLI)
+
+No custom CLI needed — kubectl IS the CLI:
+
+```bash
+kubectl apply -f task.yaml              # Submit a task
+kubectl get taskspecs -w                # Watch progress
+kubectl describe taskspec my-task       # Detailed status
+kubectl logs -n nubi-abc123 -l nubi.io/stage=executor  # Agent logs
+kubectl delete taskspec my-task         # Cancel
+```
+
+### GitOps
+
+TaskSpec YAMLs in a git repo + ArgoCD = scheduled, repeatable, auditable task submission.
+
+---
+
+## Repo Structure
+
+```
+kuuji/nubi/
+├── ARCHITECTURE.md
+├── README.md
+├── pyproject.toml
+├── src/
+│   └── nubi/
+│       ├── controller/
+│       │   ├── handlers.py      # kopf handlers (on.create, on.field for Jobs)
+│       │   ├── namespace.py     # Task namespace lifecycle
+│       │   ├── sandbox.py       # gVisor Job creation
+│       │   ├── gates.py         # Deterministic gate runners
+│       │   └── credentials.py   # Per-stage Secret creation
+│       ├── crd/
+│       │   ├── schema.py        # TaskSpec CRD schema (Pydantic)
+│       │   └── defaults.py      # Default values, spec inheritance
+│       ├── agents/
+│       │   ├── base.py          # Base Strands agent factory
+│       │   ├── planner.py
+│       │   ├── executor.py
+│       │   ├── validator.py
+│       │   └── reviewer.py
+│       ├── tools/
+│       │   ├── shell.py         # Sandboxed shell execution
+│       │   ├── git.py           # Git operations
+│       │   ├── files.py         # File read/write
+│       │   └── web.py           # Web search, HTTP requests
+│       └── output/
+│           ├── pr.py            # GitHub PR creation
+│           ├── summary.py       # LLM summary call
+│           └── notify.py        # Discord/Telegram notification
+├── prompts/
+│   ├── planner.md
+│   ├── executor.md
+│   ├── validator.md
+│   └── reviewer.md
+├── manifests/                   # Raw K8s manifests for v0.1
+│   ├── crd.yaml                 # TaskSpec CRD definition
+│   ├── namespace.yaml           # nubi-system
+│   ├── runtimeclass.yaml        # gVisor RuntimeClass
+│   ├── deployment.yaml          # Controller
+│   └── rbac.yaml                # ServiceAccount, ClusterRole, bindings
+├── examples/
+│   ├── simple-code-change.yaml
+│   ├── complex-refactor.yaml
+│   └── research-task.yaml
+├── images/
+│   ├── controller/
+│   │   └── Dockerfile           # Controller image (kopf + nubi)
+│   └── agent/
+│       └── Dockerfile           # Unified agent image (Strands + tools)
+├── tests/
+│   ├── test_handlers.py
+│   ├── test_gates.py
+│   ├── test_schema.py
+│   └── test_credentials.py
+└── hack/
+    ├── install-crd.sh
+    └── run-local.sh
+```
+
+---
+
 ## Open Questions
 
-1. **Model selection per agent**: Should the spec define which model each agent uses? Or should the controller pick based on task complexity? (e.g., planner/reviewer get Opus, executor gets Sonnet, monitorer gets Flash). Could also be a controller-level default with per-spec overrides.
-2. **State persistence across retries**: When the executor retries after reviewer feedback, does it start fresh or resume from its previous workspace? Starting fresh is simpler but wasteful. Resuming requires a PVC per executor that persists across pod restarts.
-3. **Parallel execution**: When the planner produces independent sub-tasks, should they run in parallel? The controller can manage this naturally (multiple Jobs in the same namespace), but it increases resource consumption and adds complexity to the validation/review phases.
-4. **Human-in-the-loop hooks**: Where does the human intervene? Configurable per spec? Options: approval gate after planning, approval gate after review, or fully autonomous with escalation only on failure. Could use a `spec.approval` field that pauses reconciliation and waits for a CRD annotation.
-5. **Cost budgets**: Should the spec define a max cost (in dollars)? The controller could track token usage via Langfuse and pause/abort when budget is exceeded. Requires real-time cost estimation.
-6. **Single image vs per-agent images**: One `nubi-agent` image with entrypoint-based tool selection, or separate images per role? Single image is easier to maintain; separate images have smaller attack surface per role. Leaning toward single image with tool availability controlled by environment variables.
-7. **kopf vs kubebuilder**: kopf keeps us in Python (same language as Strands), is simpler, and is sufficient for our scale. kubebuilder (Go) is the industry standard, has better performance, and generates more boilerplate for you. For a homelab operator building with Strands, kopf is the pragmatic choice — but worth revisiting if performance becomes an issue.
-8. **LLM provider credentials**: How do agent pods authenticate with LLM providers (Anthropic, OpenAI, etc.)? Options: mounted secrets per namespace, controller injects credentials at pod creation, or a shared credential proxy service.
+1. **Model selection per agent:** Should the spec define which model each agent uses, or should the controller pick based on task complexity? Could be a controller-level default with per-spec overrides.
+
+2. **State persistence across retries:** When the executor retries after feedback, does it start fresh (clone branch, see previous commits) or resume? Starting fresh with git history is simpler and naturally gives context.
+
+3. **Parallel sub-task execution:** When the planner produces independent sub-tasks, run them in parallel? The controller can manage this (multiple Jobs), but it adds complexity to validation/review.
+
+4. **Human-in-the-loop hooks:** Configurable approval gates — after planning, after review, or fully autonomous with escalation only on failure. Could use a `spec.approval` field that pauses reconciliation.
+
+5. **Cost budgets:** Langfuse tracks costs automatically. Budget enforcement can come in v0.3+ once there's real usage data to calibrate against.
+
+6. **Single image vs per-agent images:** Leaning toward single `nubi-agent` image with tool availability controlled by environment variables. Simpler to maintain, and credential scoping handles the security boundary.
