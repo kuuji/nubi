@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 
 from kubernetes_asyncio.client import (
@@ -15,7 +16,6 @@ from kubernetes_asyncio.client import (
     V1Job,
     V1JobSpec,
     V1ObjectMeta,
-    V1OwnerReference,
     V1PodSpec,
     V1PodTemplateSpec,
     V1ResourceRequirements,
@@ -60,7 +60,6 @@ def build_executor_job(
     ns_name: str,
     spec: TaskSpecSpec,
     secret_name: str,
-    owner_uid: str,
 ) -> V1Job:
     """Construct a gVisor-sandboxed executor Job."""
     job_name = f"nubi-executor-{task_name}"[:63]
@@ -87,12 +86,26 @@ def build_executor_job(
         V1EnvVar(name="NUBI_BRANCH", value=spec.inputs.branch),
         V1EnvVar(name="NUBI_DESCRIPTION", value=spec.description),
         V1EnvVar(name="NUBI_TOOLS", value=",".join(spec.constraints.tools)),
-        V1EnvVar(name="NUBI_LLM_PROVIDER", value="anthropic"),
+        V1EnvVar(name="NUBI_LLM_PROVIDER", value=os.environ.get("NUBI_LLM_PROVIDER", "anthropic")),
+        # uid 65534 (nobody) has no home dir — point HOME to workspace for git config etc.
+        V1EnvVar(name="HOME", value="/workspace"),
     ]
+
+    # Optional LLM config — pass through from controller env to agent pod
+    model_id = os.environ.get("NUBI_MODEL_ID")
+    if model_id:
+        env_plain.append(V1EnvVar(name="NUBI_MODEL_ID", value=model_id))
+    base_url = os.environ.get("NUBI_LLM_BASE_URL")
+    if base_url:
+        env_plain.append(V1EnvVar(name="NUBI_LLM_BASE_URL", value=base_url))
+
+    agent_image = os.environ.get("NUBI_AGENT_IMAGE", DEFAULT_AGENT_IMAGE)
+    pull_policy = os.environ.get("NUBI_AGENT_IMAGE_PULL_POLICY") or None
 
     container = V1Container(
         name="executor",
-        image=DEFAULT_AGENT_IMAGE,
+        image=agent_image,
+        image_pull_policy=pull_policy,
         working_dir="/workspace",
         resources=V1ResourceRequirements(
             requests={
@@ -108,7 +121,7 @@ def build_executor_job(
             run_as_non_root=True,
             run_as_user=65534,
             allow_privilege_escalation=False,
-            read_only_root_filesystem=True,
+            read_only_root_filesystem=False,
             capabilities=V1Capabilities(drop=["ALL"]),
             seccomp_profile=V1SeccompProfile(type="RuntimeDefault"),
         ),
@@ -117,6 +130,8 @@ def build_executor_job(
             V1VolumeMount(name="workspace", mount_path="/workspace"),
         ],
     )
+
+    rc = os.environ.get("NUBI_RUNTIME_CLASS", DEFAULT_GVISOR_RUNTIME_CLASS)
 
     return V1Job(
         metadata=V1ObjectMeta(
@@ -127,21 +142,13 @@ def build_executor_job(
                 LABEL_STAGE: "executor",
                 LABEL_MANAGED_BY: "nubi",
             },
-            owner_references=[
-                V1OwnerReference(
-                    api_version="nubi.io/v1",
-                    kind="TaskSpec",
-                    name=task_name,
-                    uid=owner_uid,
-                ),
-            ],
         ),
         spec=V1JobSpec(
             backoff_limit=0,
             active_deadline_seconds=timeout,
             template=V1PodTemplateSpec(
                 spec=V1PodSpec(
-                    runtime_class_name=DEFAULT_GVISOR_RUNTIME_CLASS,
+                    runtime_class_name=rc if rc else None,
                     restart_policy="Never",
                     containers=[container],
                     volumes=[
@@ -161,13 +168,12 @@ async def create_executor_job(
     ns_name: str,
     spec: TaskSpecSpec,
     secret_name: str,
-    owner_uid: str,
 ) -> str:
     """Build and create the executor Job. Idempotent (409 = no-op).
 
     Returns the Job name.
     """
-    job = build_executor_job(task_name, ns_name, spec, secret_name, owner_uid)
+    job = build_executor_job(task_name, ns_name, spec, secret_name)
     job_name = job.metadata.name
     batch_api = BatchV1Api()
 

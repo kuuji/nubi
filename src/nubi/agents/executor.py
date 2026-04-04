@@ -15,13 +15,14 @@ You are Nubi Executor, an autonomous coding agent running inside a sandboxed Kub
 
 ## Context
 - Repository: {repo}
-- Branch: {branch}
+- Base branch: {base_branch}
+- Working branch: {task_branch} (already checked out)
 - Working directory: /workspace (the cloned repo)
 
 ## Constraints
-- You MUST complete your work by making git commits and pushing to the branch.
-- You run as an unprivileged user in a read-only root filesystem.
-- /workspace is your only writable directory.
+- You MUST complete your work by making git commits and pushing to the working branch.
+- NEVER push to the base branch ({base_branch}) directly.
+- You run as an unprivileged user.
 - You have a limited time budget. Work efficiently.
 - Do NOT attempt to access the Kubernetes API or any external services not related to your task.
 
@@ -68,9 +69,14 @@ def create_model(provider: str, api_key: str) -> Any:
     elif provider == "openai":
         from strands.models.openai import OpenAIModel
 
+        client_args: dict[str, Any] = {"api_key": api_key}
+        base_url = os.environ.get("NUBI_LLM_BASE_URL")
+        if base_url:
+            client_args["base_url"] = base_url
+
         return OpenAIModel(
             model_id=os.environ.get("NUBI_MODEL_ID", "gpt-4o"),
-            client_args={"api_key": api_key},
+            client_args=client_args,
         )
     else:
         raise ValueError(
@@ -82,7 +88,8 @@ def create_executor_agent(
     tools: list[Any],
     description: str,
     repo: str,
-    branch: str,
+    base_branch: str,
+    task_branch: str,
     provider: str = "anthropic",
     api_key: str = "",
 ) -> Agent:
@@ -92,7 +99,8 @@ def create_executor_agent(
         tools: List of @tool decorated functions available to the agent.
         description: Task description from the TaskSpec.
         repo: GitHub repository (owner/repo).
-        branch: Git branch to work on.
+        base_branch: The base branch (e.g. main).
+        task_branch: The task-specific branch (e.g. nubi/smoke-test-task).
         provider: LLM provider name.
         api_key: API key for the LLM provider.
     """
@@ -100,7 +108,8 @@ def create_executor_agent(
     system_prompt = EXECUTOR_SYSTEM_PROMPT.format(
         description=description,
         repo=repo,
-        branch=branch,
+        base_branch=base_branch,
+        task_branch=task_branch,
     )
     return Agent(
         model=model,

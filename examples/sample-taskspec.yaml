@@ -1,0 +1,31 @@
+apiVersion: nubi.io/v1
+kind: TaskSpec
+metadata:
+  name: smoke-test-task
+  namespace: default
+spec:
+  description: "Update the README.md to add a 'Built with' section that mentions Nubi, an autonomous K8s agent framework"
+  type: code-change
+  inputs:
+    repo: "kuuji/nubi-playground"
+    branch: main
+  constraints:
+    timeout: "60s"
+    total_timeout: "120s"
+    resources:
+      cpu: "500m"
+      memory: "256Mi"
+    network_access:
+      - "github.com"
+    tools:
+      - shell
+      - git
+      - file_read
+      - file_write
+  validation:
+    deterministic: []
+    agentic: []
+  review:
+    enabled: false
+  output:
+    format: branch

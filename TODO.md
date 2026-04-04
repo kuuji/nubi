@@ -20,9 +20,9 @@
 - [ ] Notification output — Discord/Telegram notifications on completion
 
 ## Local Testing & Dev Loop
-- [ ] Local integration test harness — kind/k3d cluster + CRD applied + `kopf run` against it
+- [x] Local integration test harness — k3d cluster + CRD applied + `kopf run` against it
+- [x] End-to-end smoke test — apply a TaskSpec, verify full pipeline runs to completion
 - [ ] Integration test suite — real K8s API calls (namespace creation, Job spawning, status updates)
-- [ ] End-to-end smoke test — apply a TaskSpec, verify full pipeline runs to completion
 
 ## Infrastructure & Pipeline
 - [x] Controller Dockerfile — multi-stage build for kopf controller image

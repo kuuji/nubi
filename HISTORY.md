@@ -6,6 +6,25 @@
 <!-- - Files affected -->
 <!-- - Any decisions made during implementation -->
 
+## 2026-04-04 — Local dev harness + end-to-end fixes
+
+- Created local dev infrastructure: Makefile, k3d dev cluster scripts, smoke test, sample TaskSpec
+- Makefile targets: cluster-up/down, build, dev, test, lint, smoke, clean
+- Added kopf decorators to handlers (`@kopf.on.create`, `@kopf.on.event`) — handlers were plain functions, `kopf run` couldn't discover them
+- Made sandbox configurable via env vars: `NUBI_RUNTIME_CLASS` (empty = omit), `NUBI_AGENT_IMAGE`, `NUBI_AGENT_IMAGE_PULL_POLICY`
+- Removed cross-namespace ownerRef from executor Job (K8s GC'd jobs immediately since TaskSpec is in a different namespace than the job)
+- Fixed agent Dockerfile: now installs nubi package + openai dep, correct entrypoint (`python -m nubi.entrypoint`)
+- Disabled read-only rootfs on agent pods (git/python need writable home and temp dirs; isolation comes from gVisor + network policy + ephemeral namespace)
+- Set `HOME=/workspace` in agent pod env (uid 65534 has no home dir)
+- Fixed git clone for sandboxed pods: `safe.directory=*` via `-c` flag, sanitized token from error output
+- Added `NUBI_LLM_BASE_URL` support for OpenAI-compatible endpoints (OpenRouter, ollama, etc.)
+- LLM config passthrough: controller forwards `NUBI_LLM_PROVIDER`, `NUBI_MODEL_ID`, `NUBI_LLM_BASE_URL` to agent pods
+- Agent now creates `nubi/{task_id}` branch off base branch — never pushes to main directly
+- `.env` / `.env.example` for local credentials (gitignored)
+- Verified end-to-end: k3d cluster → controller → TaskSpec → namespace + credentials → job → agent pod → Kimi K2 via OpenRouter → commit + push to task branch
+- Files: Makefile, scripts/dev-cluster.sh, scripts/smoke-test.sh, examples/sample-taskspec.yaml, .env.example, .gitignore, handlers.py, sandbox.py, executor.py, entrypoint.py, git.py, agent Dockerfile, pyproject.toml, test updates
+- Decisions: k3d over kind (lighter on Linux), env var overrides over config files (simpler), drop read-only rootfs (too many things need writable dirs)
+
 ## 2026-04-03 — Executor agent full loop
 
 - Implemented executor agent with Strands SDK — tools, entrypoint, controller result reader, handler completion

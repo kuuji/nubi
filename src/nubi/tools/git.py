@@ -34,11 +34,22 @@ def git_clone(repo: str, branch: str, token: str, workspace: str) -> None:
 
     Not a @tool — called by the entrypoint before the agent starts.
     """
+    # Clone using -c to bypass safe.directory check (emptyDir owned by root, agent is unprivileged).
+    # GIT_CONFIG_GLOBAL and HOME must point to writable paths (set in container env).
     url = f"https://x-access-token:{token}@github.com/{repo}.git"
-    subprocess.run(
-        ["git", "clone", url, workspace],
+    result = subprocess.run(
+        ["git", "-c", "safe.directory=*", "clone", url, workspace],
         capture_output=True,
         text=True,
+    )
+    if result.returncode != 0:
+        # Sanitize output to avoid leaking the token in logs/tracebacks
+        sanitized = result.stderr.replace(token, "***")
+        raise RuntimeError(f"git clone failed: {sanitized}")
+    # Persist safe.directory for all subsequent git operations
+    subprocess.run(
+        ["git", "config", "--global", "--add", "safe.directory", "*"],
+        cwd=workspace,
         check=True,
     )
     subprocess.run(["git", "config", "user.email", "nubi@nubi.io"], cwd=workspace, check=True)

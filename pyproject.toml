@@ -12,6 +12,7 @@ dependencies = [
     "kubernetes-asyncio",
     "strands-agents",
     "aiohttp",
+    "openai",
 ]
 
 [project.optional-dependencies]

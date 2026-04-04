@@ -42,7 +42,8 @@ class TestCreateExecutorAgent:
             tools=[MagicMock()],
             description="fix bug",
             repo="kuuji/app",
-            branch="nubi/task-1",
+            base_branch="main",
+            task_branch="nubi/task-1",
             provider="anthropic",
             api_key="key",
         )
@@ -57,7 +58,8 @@ class TestCreateExecutorAgent:
             tools=[],
             description="add rate limiting",
             repo="kuuji/app",
-            branch="nubi/task-1",
+            base_branch="main",
+            task_branch="nubi/task-1",
         )
         call_kwargs = mock_agent.call_args.kwargs
         assert "add rate limiting" in call_kwargs["system_prompt"]
@@ -71,7 +73,8 @@ class TestCreateExecutorAgent:
             tools=[],
             description="task",
             repo="kuuji/my-app",
-            branch="main",
+            base_branch="main",
+            task_branch="nubi/task-1",
         )
         call_kwargs = mock_agent.call_args.kwargs
         assert "kuuji/my-app" in call_kwargs["system_prompt"]
@@ -79,7 +82,7 @@ class TestCreateExecutorAgent:
     @patch("nubi.agents.executor.Agent")
     @patch("nubi.agents.executor.create_model")
     def test_callback_handler_is_none(self, mock_model: MagicMock, mock_agent: MagicMock) -> None:
-        create_executor_agent(tools=[], description="t", repo="r", branch="b")
+        create_executor_agent(tools=[], description="t", repo="r", base_branch="b", task_branch="t")
         call_kwargs = mock_agent.call_args.kwargs
         assert call_kwargs["callback_handler"] is None
 
@@ -88,9 +91,12 @@ class TestSystemPrompt:
     def test_has_placeholders(self) -> None:
         assert "{description}" in EXECUTOR_SYSTEM_PROMPT
         assert "{repo}" in EXECUTOR_SYSTEM_PROMPT
-        assert "{branch}" in EXECUTOR_SYSTEM_PROMPT
+        assert "{base_branch}" in EXECUTOR_SYSTEM_PROMPT
+        assert "{task_branch}" in EXECUTOR_SYSTEM_PROMPT
 
     def test_format_works(self) -> None:
-        result = EXECUTOR_SYSTEM_PROMPT.format(description="test", repo="owner/repo", branch="main")
+        result = EXECUTOR_SYSTEM_PROMPT.format(
+            description="test", repo="owner/repo", base_branch="main", task_branch="nubi/t1"
+        )
         assert "test" in result
         assert "owner/repo" in result

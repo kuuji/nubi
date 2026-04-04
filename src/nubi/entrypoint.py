@@ -51,10 +51,26 @@ def main() -> int:
     token = os.environ["GITHUB_TOKEN"]
     api_key = os.environ["LLM_API_KEY"]
 
-    logger.info("Executor starting: task=%s repo=%s branch=%s", task_id, repo, branch)
+    task_branch = f"nubi/{task_id}"
+    logger.info(
+        "Executor starting: task=%s repo=%s base=%s branch=%s",
+        task_id,
+        repo,
+        branch,
+        task_branch,
+    )
 
     try:
         git_clone(repo, branch, token, workspace)
+
+        # Create task branch off the base branch — agent never pushes to main
+        subprocess.run(
+            ["git", "checkout", "-b", task_branch],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
         allowed_tools = [t.strip() for t in tools_csv.split(",") if t.strip()]
         tools = get_tools(allowed_tools, workspace)
@@ -63,7 +79,8 @@ def main() -> int:
             tools=tools,
             description=description,
             repo=repo,
-            branch=branch,
+            base_branch=branch,
+            task_branch=task_branch,
             provider=provider,
             api_key=api_key,
         )

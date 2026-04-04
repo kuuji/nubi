@@ -6,6 +6,8 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+import kopf
+
 from nubi.controller.credentials import ensure_stage_secret
 from nubi.controller.namespace import ensure_task_namespace
 from nubi.controller.results import read_executor_result
@@ -17,6 +19,7 @@ from nubi.exceptions import CredentialError, NamespaceError, ResultError, Sandbo
 logger = logging.getLogger(__name__)
 
 
+@kopf.on.create("taskspecs", group="nubi.io", version="v1")  # type: ignore[arg-type]
 async def on_taskspec_created(
     spec: dict[str, Any],
     name: str,
@@ -52,8 +55,7 @@ async def on_taskspec_created(
         raise
 
     try:
-        owner_uid = kwargs.get("uid", "")
-        job_name = await create_executor_job(name, ns_name, task_spec, secret_name, owner_uid)
+        job_name = await create_executor_job(name, ns_name, task_spec, secret_name)
     except SandboxError:
         patch.status["phase"] = Phase.FAILED
         raise
@@ -65,6 +67,7 @@ async def on_taskspec_created(
     return {"message": f"TaskSpec {name} accepted, executor job {job_name} created"}
 
 
+@kopf.on.event("jobs", group="batch", version="v1", labels={"app.kubernetes.io/managed-by": "nubi"})  # type: ignore[arg-type]
 async def on_job_status_change(
     name: str,
     namespace: str,

@@ -45,7 +45,6 @@ def _build(**kw: object) -> object:
         "ns_name": "nubi-task-1",
         "spec": _spec(),
         "secret_name": "nubi-executor-credentials",
-        "owner_uid": "uid-abc-123",
     }
     defaults.update(kw)
     return build_executor_job(**defaults)
@@ -97,15 +96,9 @@ class TestBuildExecutorJobMetadata:
         assert labels["nubi.io/stage"] == "executor"
         assert labels["app.kubernetes.io/managed-by"] == "nubi"
 
-    def test_owner_reference(self) -> None:
-        job = _build(task_name="task-1", owner_uid="uid-123")
-        refs = job.metadata.owner_references
-        assert len(refs) == 1
-        ref = refs[0]
-        assert ref.api_version == "nubi.io/v1"
-        assert ref.kind == "TaskSpec"
-        assert ref.name == "task-1"
-        assert ref.uid == "uid-123"
+    def test_no_owner_references(self) -> None:
+        job = _build(task_name="task-1")
+        assert job.metadata.owner_references is None
 
 
 # -- build_executor_job — job spec -------------------------------------------
@@ -128,6 +121,16 @@ class TestBuildExecutorJobSpec:
         job = _build()
         assert job.spec.template.spec.runtime_class_name == "gvisor"
 
+    def test_runtime_class_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NUBI_RUNTIME_CLASS", "kata")
+        job = _build()
+        assert job.spec.template.spec.runtime_class_name == "kata"
+
+    def test_runtime_class_empty_omits(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NUBI_RUNTIME_CLASS", "")
+        job = _build()
+        assert job.spec.template.spec.runtime_class_name is None
+
 
 # -- build_executor_job — container ------------------------------------------
 
@@ -144,6 +147,20 @@ class TestBuildExecutorJobContainer:
     def test_image(self) -> None:
         c = self._container()
         assert c.image == "ghcr.io/kuuji/nubi-agent:latest"
+
+    def test_image_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NUBI_AGENT_IMAGE", "my-registry/custom-agent:v1")
+        c = self._container()
+        assert c.image == "my-registry/custom-agent:v1"
+
+    def test_image_pull_policy_default_none(self) -> None:
+        c = self._container()
+        assert c.image_pull_policy is None
+
+    def test_image_pull_policy_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NUBI_AGENT_IMAGE_PULL_POLICY", "IfNotPresent")
+        c = self._container()
+        assert c.image_pull_policy == "IfNotPresent"
 
     def test_working_dir(self) -> None:
         c = self._container()
@@ -184,8 +201,8 @@ class TestBuildExecutorJobSecurity:
     def test_no_privilege_escalation(self) -> None:
         assert self._sec_ctx().allow_privilege_escalation is False
 
-    def test_read_only_root_fs(self) -> None:
-        assert self._sec_ctx().read_only_root_filesystem is True
+    def test_read_only_root_fs_disabled(self) -> None:
+        assert self._sec_ctx().read_only_root_filesystem is False
 
     def test_drop_all_capabilities(self) -> None:
         assert self._sec_ctx().capabilities.drop == ["ALL"]
@@ -268,26 +285,22 @@ class TestCreateExecutorJob:
 
     async def test_returns_job_name(self) -> None:
         result = await create_executor_job(
-            "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials", "uid-123"
+            "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials"
         )
         assert result == "nubi-executor-task-1"
 
     async def test_calls_create_namespaced_job(self) -> None:
-        await create_executor_job(
-            "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials", "uid-123"
-        )
+        await create_executor_job("task-1", "nubi-task-1", _spec(), "nubi-executor-credentials")
         self.mock_batch.create_namespaced_job.assert_awaited_once()
 
     async def test_409_returns_name(self) -> None:
         self.mock_batch.create_namespaced_job.side_effect = _api_exc(409, "Conflict")
         result = await create_executor_job(
-            "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials", "uid-123"
+            "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials"
         )
         assert result == "nubi-executor-task-1"
 
     async def test_500_raises_sandbox_error(self) -> None:
         self.mock_batch.create_namespaced_job.side_effect = _api_exc(500, "Internal")
         with pytest.raises(SandboxError):
-            await create_executor_job(
-                "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials", "uid-123"
-            )
+            await create_executor_job("task-1", "nubi-task-1", _spec(), "nubi-executor-credentials")
