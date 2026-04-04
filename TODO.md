@@ -6,7 +6,7 @@
 - [x] kopf handler skeleton — on.create for TaskSpec, on.field for Job status changes
 
 ## Backlog
-- [ ] Task namespace lifecycle — create/cleanup namespace with ResourceQuota, NetworkPolicy, PSS labels
+- [x] Task namespace lifecycle — create/cleanup namespace with ResourceQuota, NetworkPolicy, PSS labels
 - [ ] Credential scoping — per-stage Secret creation with least-privilege
 - [ ] gVisor Job builder — create sandboxed executor Jobs with RuntimeClass, resource limits, env-var tool control
 - [ ] Executor agent — Strands agent with shell, file, git tools; clone branch, do work, push

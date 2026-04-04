@@ -180,6 +180,7 @@ class TaskSpecSpec(BaseModel):
 class WorkspaceStatus(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    namespace: str = Field(default="")
     repo: str = Field(default="")
     branch: str = Field(default="")
     head_sha: str = Field(default="", alias="headSHA")
@@ -230,6 +231,7 @@ class TaskSpecStatus(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     phase: Phase = Field(default=Phase.PENDING)
+    phase_changed_at: str = Field(default="", alias="phaseChangedAt")
     workspace: WorkspaceStatus = Field(default_factory=WorkspaceStatus)
     stages: StageStatuses = Field(default_factory=StageStatuses)
 

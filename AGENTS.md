@@ -66,7 +66,7 @@ Before considering work done, every agent must:
 - **Async:** Use async/await throughout — kopf handlers are async, Strands supports async
 - **Imports:** Absolute imports from `nubi.*` (e.g., `from nubi.controller.namespace import create_task_namespace`)
 - **Error handling:** Use specific exception types, not bare `except`. Define custom exceptions in `nubi/exceptions.py`
-- **Kubernetes types:** Use `kr8s` or `kubernetes-asyncio` for typed K8s API access
+- **Kubernetes types:** Use `kubernetes-asyncio` for typed K8s API access
 - **Pydantic:** Use Pydantic v2 for CRD schema validation and all structured data
 
 ## Commit Conventions

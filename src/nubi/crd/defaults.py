@@ -15,3 +15,13 @@ DEFAULT_MONITORING_SUMMARY = True
 DEFAULT_RESOURCE_CPU = "1"
 DEFAULT_RESOURCE_MEMORY = "512Mi"
 DEFAULT_BRANCH = "main"
+
+# -- Namespace lifecycle -----------------------------------------------------
+
+DEFAULT_NAMESPACE_PREFIX = "nubi-"
+DEFAULT_GVISOR_RUNTIME_CLASS = "gvisor"
+DEFAULT_CLEANUP_TTL_SUCCESS = 3600
+DEFAULT_CLEANUP_TTL_FAILURE = 0
+LABEL_TASK_ID = "nubi.io/task-id"
+LABEL_TASK_TYPE = "nubi.io/task-type"
+LABEL_MANAGED_BY = "app.kubernetes.io/managed-by"

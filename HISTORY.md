@@ -6,6 +6,19 @@
 <!-- - Files affected -->
 <!-- - Any decisions made during implementation -->
 
+## 2026-04-03 — Task namespace lifecycle
+
+- Implemented `nubi.controller.namespace` — creates isolated namespace per task with ResourceQuota, NetworkPolicy, PSS labels
+- Namespace naming: `nubi-{task-name}`, truncated to 63 chars
+- ResourceQuota mirrors spec constraints (cpu, memory) + pods cap of 4
+- NetworkPolicy: deny-all ingress, always allow DNS egress (port 53), allow web egress (80/443) only when `network_access` non-empty
+- All K8s API calls idempotent (409 = no-op), non-recoverable errors raise `NamespaceError`
+- Handler integration: `on_taskspec_created` now creates namespace and records it in `status.workspace.namespace`
+- Schema additions: `WorkspaceStatus.namespace`, `TaskSpecStatus.phase_changed_at`
+- Added `kubernetes_asyncio` dependency and mypy overrides
+- 27 new tests in `test_namespace.py`, 8 handler tests updated
+- Decisions: NetworkPolicy hostname matching deferred (v0.1 uses port-based), cleanup timer deferred to pipeline phase wiring
+
 ## 2026-04-03 — Project foundation (scaffold + CRD schema + handler skeleton)
 
 - Created pyproject.toml with kopf, pydantic v2, kubernetes-asyncio deps and dev tooling (pytest, ruff, mypy)

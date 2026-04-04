@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
+from nubi.controller.namespace import ensure_task_namespace
 from nubi.crd.schema import Phase, TaskSpecSpec
+from nubi.exceptions import NamespaceError
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +20,7 @@ async def on_taskspec_created(
     patch: Any,
     **kwargs: Any,
 ) -> dict[str, str]:
-    """Handle TaskSpec creation: validate and set initial phase."""
+    """Handle TaskSpec creation: validate, create namespace, set initial phase."""
     task_spec = TaskSpecSpec.model_validate(spec)
     logger.info(
         "TaskSpec created: %s/%s type=%s repo=%s",
@@ -28,12 +31,20 @@ async def on_taskspec_created(
     )
 
     patch.status["phase"] = Phase.PENDING
+    patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
 
-    # TODO: Create task namespace
+    try:
+        ns_name = await ensure_task_namespace(name, task_spec.type.value, task_spec.constraints)
+    except NamespaceError:
+        patch.status["phase"] = Phase.FAILED
+        raise
+
+    patch.status["workspace"] = {"namespace": ns_name}
+
     # TODO: Create git branch
     # TODO: Spawn executor job
 
-    return {"message": f"TaskSpec {name} accepted"}
+    return {"message": f"TaskSpec {name} accepted, namespace {ns_name} created"}
 
 
 async def on_job_status_change(

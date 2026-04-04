@@ -15,3 +15,7 @@ class PhaseTransitionError(NubiError):
 
 class HandlerError(NubiError):
     """Raised when a kopf handler encounters an error."""
+
+
+class NamespaceError(NubiError):
+    """Raised when namespace lifecycle operations fail."""
