@@ -1,9 +1,9 @@
 # Nubi — TODO
 
 ## Next Up
-- [ ] Project scaffold — pyproject.toml, src/nubi/ package structure, dev dependencies (pytest, ruff, mypy)
-- [ ] TaskSpec CRD Pydantic schema — `nubi.crd.schema` with full spec/status models
-- [ ] kopf handler skeleton — on.create for TaskSpec, on.field for Job status changes
+- [x] Project scaffold — pyproject.toml, src/nubi/ package structure, dev dependencies (pytest, ruff, mypy)
+- [x] TaskSpec CRD Pydantic schema — `nubi.crd.schema` with full spec/status models
+- [x] kopf handler skeleton — on.create for TaskSpec, on.field for Job status changes
 
 ## Backlog
 - [ ] Task namespace lifecycle — create/cleanup namespace with ResourceQuota, NetworkPolicy, PSS labels
