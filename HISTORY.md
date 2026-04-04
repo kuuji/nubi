@@ -6,6 +6,16 @@
 <!-- - Files affected -->
 <!-- - Any decisions made during implementation -->
 
+## 2026-04-03 — Infrastructure & pipeline scaffold
+
+- Controller Dockerfile — multi-stage build (python:3.12-slim), non-root, `kopf run` entrypoint
+- Agent Dockerfile — single image with git/curl/build tools, strands-agents SDK, env-var tool control via NUBI_TOOLS
+- TaskSpec CRD YAML manifest — full openAPIV3Schema matching Pydantic models, printer columns (name, type, phase, age), status subresource
+- Controller Deployment manifest — nubi-system namespace, ServiceAccount, ClusterRole with scoped RBAC, security-hardened pod spec (non-root, read-only rootfs, drop ALL caps)
+- gVisor RuntimeClass manifest (handler: runsc)
+- GitHub Actions CI — ruff + mypy + pytest on PRs, image build & push to GHCR on merge to main
+- Files: .github/workflows/ci.yml, images/controller/Dockerfile, images/agent/Dockerfile, manifests/crd.yaml, manifests/deployment.yaml
+
 ## 2026-04-03 — Sandbox job spawning (credentials + gVisor Job builder)
 
 - Implemented `nubi.controller.credentials` — per-stage Secret creation with least-privilege scoping
