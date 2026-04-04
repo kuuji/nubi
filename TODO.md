@@ -7,8 +7,8 @@
 
 ## Backlog
 - [x] Task namespace lifecycle — create/cleanup namespace with ResourceQuota, NetworkPolicy, PSS labels
-- [ ] Credential scoping — per-stage Secret creation with least-privilege
-- [ ] gVisor Job builder — create sandboxed executor Jobs with RuntimeClass, resource limits, env-var tool control
+- [x] Credential scoping — per-stage Secret creation with least-privilege
+- [x] gVisor Job builder — create sandboxed executor Jobs with RuntimeClass, resource limits, env-var tool control
 - [ ] Executor agent — Strands agent with shell, file, git tools; clone branch, do work, push
 - [ ] Deterministic gates — lint/test/secret-scan runners, failure feedback to executor
 - [ ] Validator agent — writes test suites, commits to branch, runs them

@@ -19,3 +19,11 @@ class HandlerError(NubiError):
 
 class NamespaceError(NubiError):
     """Raised when namespace lifecycle operations fail."""
+
+
+class CredentialError(NubiError):
+    """Raised when credential scoping operations fail."""
+
+
+class SandboxError(NubiError):
+    """Raised when sandbox job operations fail."""

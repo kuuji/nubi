@@ -6,6 +6,20 @@
 <!-- - Files affected -->
 <!-- - Any decisions made during implementation -->
 
+## 2026-04-03 — Sandbox job spawning (credentials + gVisor Job builder)
+
+- Implemented `nubi.controller.credentials` — per-stage Secret creation with least-privilege scoping
+- Stage credential mapping: executor/validator get both github-token + llm-api-key, reviewer gets llm-api-key only, gate gets nothing
+- Reads master Secret from `nubi-system/nubi-credentials`, creates scoped Secret in task namespace
+- Implemented `nubi.controller.sandbox` — gVisor Job builder with restricted PSS security context
+- Job features: gVisor RuntimeClass, run-as-nobody (65534), read-only root fs, drop ALL caps, RuntimeDefault seccomp, emptyDir workspace, activeDeadlineSeconds from timeout, owner references for GC
+- Env vars: Secret-backed GITHUB_TOKEN/LLM_API_KEY, plain NUBI_TASK_ID/REPO/BRANCH/DESCRIPTION/TOOLS
+- Handler wired end-to-end: on_taskspec_created now creates namespace → scopes credentials → spawns executor Job → sets phase to Executing
+- New exceptions: `CredentialError`, `SandboxError`
+- New constants: MASTER_SECRET_NAME, LABEL_STAGE, DEFAULT_AGENT_IMAGE, credential key names
+- 52 new tests (16 credentials, 30 sandbox, 6 handler updates), total 134 passing
+- Decisions: parse_duration supports seconds-only for v0.1, env-var tool control via NUBI_TOOLS comma-separated
+
 ## 2026-04-03 — Task namespace lifecycle
 
 - Implemented `nubi.controller.namespace` — creates isolated namespace per task with ResourceQuota, NetworkPolicy, PSS labels

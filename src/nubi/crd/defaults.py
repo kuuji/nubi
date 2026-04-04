@@ -24,4 +24,16 @@ DEFAULT_CLEANUP_TTL_SUCCESS = 3600
 DEFAULT_CLEANUP_TTL_FAILURE = 0
 LABEL_TASK_ID = "nubi.io/task-id"
 LABEL_TASK_TYPE = "nubi.io/task-type"
+LABEL_STAGE = "nubi.io/stage"
 LABEL_MANAGED_BY = "app.kubernetes.io/managed-by"
+
+# -- Credential scoping ------------------------------------------------------
+
+MASTER_SECRET_NAME = "nubi-credentials"
+MASTER_SECRET_NAMESPACE = "nubi-system"
+CREDENTIAL_GITHUB_TOKEN = "github-token"
+CREDENTIAL_LLM_API_KEY = "llm-api-key"
+
+# -- Sandbox job builder -----------------------------------------------------
+
+DEFAULT_AGENT_IMAGE = "ghcr.io/kuuji/nubi-agent:latest"

@@ -1,0 +1,181 @@
+"""gVisor Job builder — create sandboxed executor Jobs."""
+
+from __future__ import annotations
+
+import logging
+import re
+
+from kubernetes_asyncio.client import (
+    BatchV1Api,
+    V1Capabilities,
+    V1Container,
+    V1EmptyDirVolumeSource,
+    V1EnvVar,
+    V1EnvVarSource,
+    V1Job,
+    V1JobSpec,
+    V1ObjectMeta,
+    V1OwnerReference,
+    V1PodSpec,
+    V1PodTemplateSpec,
+    V1ResourceRequirements,
+    V1SeccompProfile,
+    V1SecretKeySelector,
+    V1SecurityContext,
+    V1Volume,
+    V1VolumeMount,
+)
+from kubernetes_asyncio.client.exceptions import ApiException
+
+from nubi.crd.defaults import (
+    CREDENTIAL_GITHUB_TOKEN,
+    CREDENTIAL_LLM_API_KEY,
+    DEFAULT_AGENT_IMAGE,
+    DEFAULT_GVISOR_RUNTIME_CLASS,
+    LABEL_MANAGED_BY,
+    LABEL_STAGE,
+    LABEL_TASK_ID,
+)
+from nubi.crd.schema import TaskSpecSpec
+from nubi.exceptions import SandboxError
+
+logger = logging.getLogger(__name__)
+
+_DURATION_RE = re.compile(r"^(\d+)s$")
+
+
+def parse_duration(duration: str) -> int:
+    """Convert a duration string like '300s' to integer seconds.
+
+    Only supports seconds suffix for v0.1.
+    """
+    match = _DURATION_RE.match(duration)
+    if not match:
+        raise ValueError(f"Invalid duration format: {duration!r} (expected '<int>s')")
+    return int(match.group(1))
+
+
+def build_executor_job(
+    task_name: str,
+    ns_name: str,
+    spec: TaskSpecSpec,
+    secret_name: str,
+    owner_uid: str,
+) -> V1Job:
+    """Construct a gVisor-sandboxed executor Job."""
+    job_name = f"nubi-executor-{task_name}"[:63]
+    timeout = parse_duration(spec.constraints.timeout)
+
+    env_from_secret = [
+        V1EnvVar(
+            name="GITHUB_TOKEN",
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(name=secret_name, key=CREDENTIAL_GITHUB_TOKEN),
+            ),
+        ),
+        V1EnvVar(
+            name="LLM_API_KEY",
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(name=secret_name, key=CREDENTIAL_LLM_API_KEY),
+            ),
+        ),
+    ]
+
+    env_plain = [
+        V1EnvVar(name="NUBI_TASK_ID", value=task_name),
+        V1EnvVar(name="NUBI_REPO", value=spec.inputs.repo),
+        V1EnvVar(name="NUBI_BRANCH", value=spec.inputs.branch),
+        V1EnvVar(name="NUBI_DESCRIPTION", value=spec.description),
+        V1EnvVar(name="NUBI_TOOLS", value=",".join(spec.constraints.tools)),
+    ]
+
+    container = V1Container(
+        name="executor",
+        image=DEFAULT_AGENT_IMAGE,
+        working_dir="/workspace",
+        resources=V1ResourceRequirements(
+            requests={
+                "cpu": spec.constraints.resources.cpu,
+                "memory": spec.constraints.resources.memory,
+            },
+            limits={
+                "cpu": spec.constraints.resources.cpu,
+                "memory": spec.constraints.resources.memory,
+            },
+        ),
+        security_context=V1SecurityContext(
+            run_as_non_root=True,
+            run_as_user=65534,
+            allow_privilege_escalation=False,
+            read_only_root_filesystem=True,
+            capabilities=V1Capabilities(drop=["ALL"]),
+            seccomp_profile=V1SeccompProfile(type="RuntimeDefault"),
+        ),
+        env=env_from_secret + env_plain,
+        volume_mounts=[
+            V1VolumeMount(name="workspace", mount_path="/workspace"),
+        ],
+    )
+
+    return V1Job(
+        metadata=V1ObjectMeta(
+            name=job_name,
+            namespace=ns_name,
+            labels={
+                LABEL_TASK_ID: task_name,
+                LABEL_STAGE: "executor",
+                LABEL_MANAGED_BY: "nubi",
+            },
+            owner_references=[
+                V1OwnerReference(
+                    api_version="nubi.io/v1",
+                    kind="TaskSpec",
+                    name=task_name,
+                    uid=owner_uid,
+                ),
+            ],
+        ),
+        spec=V1JobSpec(
+            backoff_limit=0,
+            active_deadline_seconds=timeout,
+            template=V1PodTemplateSpec(
+                spec=V1PodSpec(
+                    runtime_class_name=DEFAULT_GVISOR_RUNTIME_CLASS,
+                    restart_policy="Never",
+                    containers=[container],
+                    volumes=[
+                        V1Volume(
+                            name="workspace",
+                            empty_dir=V1EmptyDirVolumeSource(),
+                        ),
+                    ],
+                ),
+            ),
+        ),
+    )
+
+
+async def create_executor_job(
+    task_name: str,
+    ns_name: str,
+    spec: TaskSpecSpec,
+    secret_name: str,
+    owner_uid: str,
+) -> str:
+    """Build and create the executor Job. Idempotent (409 = no-op).
+
+    Returns the Job name.
+    """
+    job = build_executor_job(task_name, ns_name, spec, secret_name, owner_uid)
+    job_name = job.metadata.name
+    batch_api = BatchV1Api()
+
+    try:
+        await batch_api.create_namespaced_job(namespace=ns_name, body=job)
+    except ApiException as exc:
+        if exc.status == 409:
+            logger.info("Job %s in %s already exists, continuing", job_name, ns_name)
+            return job_name
+        raise SandboxError(f"Failed to create job {job_name} in {ns_name}: {exc}") from exc
+
+    return job_name
