@@ -55,8 +55,17 @@ spec:
                   enum:
                     - code-change
                     - research
+                    - infra
+                    - investigation
                     - refactor
-                    - docs
+                priority:
+                  type: string
+                  enum:
+                    - low
+                    - normal
+                    - high
+                    - critical
+                  default: normal
                 inputs:
                   type: object
                   required:

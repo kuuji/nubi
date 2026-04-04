@@ -128,10 +128,3 @@ kind: RuntimeClass
 metadata:
   name: gvisor
 handler: runsc
-scheduling:
-  nodeClassification:
-    tolerations:
-      - key: sandbox.gke.io/runtime
-        operator: Equal
-        value: gvisor
-        effect: NoSchedule
