@@ -16,10 +16,21 @@
 - [ ] Loop resolution — retry logic (gate→executor, validator→executor, reviewer→executor) with max_retries
 - [ ] PR output — create GitHub PR from task branch on approval
 - [ ] Summary call — single LLM call to produce human-readable narrative from CRD status + traces
-- [ ] TaskSpec CRD YAML manifest — CustomResourceDefinition for kubectl apply
-- [ ] Controller Deployment manifest — Deployment + ServiceAccount + RBAC
 - [ ] Planner agent — task decomposition for complex specs (opt-in)
 - [ ] Notification output — Discord/Telegram notifications on completion
+
+## Local Testing & Dev Loop
+- [ ] Local integration test harness — kind/k3d cluster + CRD applied + `kopf run` against it
+- [ ] Integration test suite — real K8s API calls (namespace creation, Job spawning, status updates)
+- [ ] End-to-end smoke test — apply a TaskSpec, verify full pipeline runs to completion
+
+## Infrastructure & Pipeline
+- [ ] Controller Dockerfile — multi-stage build for kopf controller image
+- [ ] Agent Dockerfile — single image with tool availability via env vars
+- [ ] TaskSpec CRD YAML manifest — CustomResourceDefinition for kubectl apply
+- [ ] Controller Deployment manifest — Deployment + ServiceAccount + RBAC + RuntimeClass
+- [ ] GitHub Actions CI — lint, type-check, test on PRs; image build on merge
+- [ ] Helm chart — templated deployment for production
 
 ## Ideas
 - Langfuse integration for tracing and cost tracking
