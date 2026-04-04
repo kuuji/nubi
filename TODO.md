@@ -25,11 +25,11 @@
 - [ ] End-to-end smoke test — apply a TaskSpec, verify full pipeline runs to completion
 
 ## Infrastructure & Pipeline
-- [ ] Controller Dockerfile — multi-stage build for kopf controller image
-- [ ] Agent Dockerfile — single image with tool availability via env vars
-- [ ] TaskSpec CRD YAML manifest — CustomResourceDefinition for kubectl apply
-- [ ] Controller Deployment manifest — Deployment + ServiceAccount + RBAC + RuntimeClass
-- [ ] GitHub Actions CI — lint, type-check, test on PRs; image build on merge
+- [x] Controller Dockerfile — multi-stage build for kopf controller image
+- [x] Agent Dockerfile — single image with tool availability via env vars
+- [x] TaskSpec CRD YAML manifest — CustomResourceDefinition for kubectl apply
+- [x] Controller Deployment manifest — Deployment + ServiceAccount + RBAC + RuntimeClass
+- [x] GitHub Actions CI — lint, type-check, test on PRs; image build on merge
 - [ ] Helm chart — templated deployment for production
 
 ## Ideas
