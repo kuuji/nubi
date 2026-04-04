@@ -6,6 +6,22 @@
 <!-- - Files affected -->
 <!-- - Any decisions made during implementation -->
 
+## 2026-04-03 — Executor agent full loop
+
+- Implemented executor agent with Strands SDK — tools, entrypoint, controller result reader, handler completion
+- Tools: `run_shell` (subprocess, output truncation, timeout), `git_clone/diff/log/commit/push/status`, `file_read/write/list` (path traversal protection)
+- Tool registry with `get_tools()` filtering by NUBI_TOOLS env var groups
+- Agent factory with provider-agnostic model creation (anthropic/bedrock/openai via NUBI_LLM_PROVIDER)
+- Container entrypoint: env parsing → clone → agent run → result write → commit → push
+- Git-native result reporting: agent commits `.nubi/result.json` to branch, controller reads via GitHub REST API
+- Handler `on_job_status_change` implemented: reads Job conditions, fetches result, updates CRD status (phase, executor stage, workspace SHA)
+- New module: `nubi.controller.results` (aiohttp GitHub API client)
+- New exception: `ResultError`
+- Added NUBI_LLM_PROVIDER env var to Job spec in sandbox builder
+- Added `strands-agents` and `aiohttp` dependencies
+- 63 new tests, total 197 passing. mypy clean, ruff clean.
+- Decisions: result via git (not logs/termination message), provider-agnostic (not Anthropic-only), callback_handler=None to suppress stdout
+
 ## 2026-04-03 — Infrastructure & pipeline scaffold
 
 - Controller Dockerfile — multi-stage build (python:3.12-slim), non-root, `kopf run` entrypoint

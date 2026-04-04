@@ -27,3 +27,7 @@ class CredentialError(NubiError):
 
 class SandboxError(NubiError):
     """Raised when sandbox job operations fail."""
+
+
+class ResultError(NubiError):
+    """Raised when reading executor results fails."""

@@ -87,6 +87,7 @@ def build_executor_job(
         V1EnvVar(name="NUBI_BRANCH", value=spec.inputs.branch),
         V1EnvVar(name="NUBI_DESCRIPTION", value=spec.description),
         V1EnvVar(name="NUBI_TOOLS", value=",".join(spec.constraints.tools)),
+        V1EnvVar(name="NUBI_LLM_PROVIDER", value="anthropic"),
     ]
 
     container = V1Container(

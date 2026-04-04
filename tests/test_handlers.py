@@ -193,13 +193,27 @@ class TestOnTaskSpecCreatedInvalid:
 
 class TestOnJobStatusChange:
     async def test_logs_task_id_and_stage(self, caplog: pytest.LogCaptureFixture) -> None:
+        fp = FakePatch()
         labels = {
             "nubi.io/task-id": "task-abc-123",
             "nubi.io/stage": "executor",
         }
         with caplog.at_level(logging.INFO):
             await on_job_status_change(
-                labels=labels, name="job-xyz", namespace="nubi-task-abc", status={}
+                labels=labels, name="job-xyz", namespace="nubi-task-abc", status={}, patch=fp
             )
         assert "task-abc-123" in caplog.text
         assert "executor" in caplog.text
+
+    async def test_ignores_running_job(self) -> None:
+        fp = FakePatch()
+        labels = {"nubi.io/task-id": "task-1", "nubi.io/stage": "executor"}
+        await on_job_status_change(labels=labels, name="j", namespace="ns", status={}, patch=fp)
+        assert "phase" not in fp.status
+
+    async def test_failed_job_sets_failed_phase(self) -> None:
+        fp = FakePatch()
+        labels = {"nubi.io/task-id": "task-1", "nubi.io/stage": "executor"}
+        status = {"conditions": [{"type": "Failed", "status": "True"}]}
+        await on_job_status_change(labels=labels, name="j", namespace="ns", status=status, patch=fp)
+        assert fp.status.get("phase") == "Failed"
