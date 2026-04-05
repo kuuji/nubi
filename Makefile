@@ -18,10 +18,15 @@ cluster-down:
 build: check-deps
 	docker build -f images/controller/Dockerfile -t $(CONTROLLER_IMAGE) .
 	docker build -f images/agent/Dockerfile -t $(AGENT_IMAGE) .
-	k3d image import $(CONTROLLER_IMAGE) $(AGENT_IMAGE) -c $(CLUSTER_NAME)
+	k3d image import $(AGENT_IMAGE) -c $(CLUSTER_NAME)
 
 dev:
 	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; \
+	NUBI_RUNTIME_CLASS="" \
+	NUBI_LLM_PROVIDER=openai \
+	NUBI_MODEL_ID=moonshotai/kimi-k2 \
+	NUBI_LLM_BASE_URL=https://openrouter.ai/api/v1 \
+	NUBI_AGENT_IMAGE_PULL_POLICY=IfNotPresent \
 	kopf run src/nubi/controller/handlers.py --verbose
 
 test:

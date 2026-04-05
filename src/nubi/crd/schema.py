@@ -6,6 +6,12 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from nubi.agents.gate_result import (  # noqa: F401
+    GateCategory,
+    GatePolicy,
+    GateStatus,
+    GateThreshold,
+)
 from nubi.crd.defaults import (
     DEFAULT_BRANCH,
     DEFAULT_DECOMPOSITION_ALLOW,
@@ -172,6 +178,7 @@ class TaskSpecSpec(BaseModel):
     output: TaskOutput = Field(default_factory=TaskOutput)
     decomposition: TaskDecomposition = Field(default_factory=TaskDecomposition)
     monitoring: TaskMonitoring = Field(default_factory=TaskMonitoring)
+    gate_policy: GatePolicy = Field(default_factory=GatePolicy)
 
 
 # -- Mutable status models ---------------------------------------------------
@@ -219,12 +226,21 @@ class ReviewerStageStatus(BaseModel):
     decision: str = Field(default="")
 
 
+class GatingStageStatus(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    status: str = Field(default="pending")
+    passed: bool = Field(default=False)
+    attempt: int = Field(default=0)
+
+
 class StageStatuses(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     executor: ExecutorStageStatus = Field(default_factory=ExecutorStageStatus)
     validator: ValidatorStageStatus = Field(default_factory=ValidatorStageStatus)
     reviewer: ReviewerStageStatus = Field(default_factory=ReviewerStageStatus)
+    gating: GatingStageStatus = Field(default_factory=GatingStageStatus)
 
 
 class TaskSpecStatus(BaseModel):

@@ -1,0 +1,56 @@
+apiVersion: nubi.io/v1
+kind: TaskSpec
+metadata:
+  name: add-go-cli-to-playground
+  namespace: default
+spec:
+  description: |
+    Add a Go CLI project to the kuuji/nubi-playground repository on the main branch.
+    
+    Create a new directory `cli/` with a Go CLI project that:
+    - Has a main.go with a simple CLI (e.g., a todo list CLI or similar)
+    - Has a go.mod file
+    - Has at least one test file with real tests
+    - Has golangci-lint configuration (.golangci.yml)
+    - Has meaningful code (not boilerplate) - the CLI should actually do something
+    
+    The project structure should look like:
+    ```
+    cli/
+    ├── go.mod
+    ├── go.sum
+    ├── main.go
+    ├── .golangci.yml
+    └── todo_test.go (or similar)
+    ```
+    
+    The code should:
+    - Have some functions with complexity > 5 (to test complexity gates)
+    - Have some lint issues that need fixing (e.g., unused imports, variable naming)
+    - Have working tests
+    
+    This will be used to test deterministic gates (lint, test, complexity) on a Go project.
+  type: code-change
+  inputs:
+    repo: "kuuji/nubi-playground"
+    branch: main
+  constraints:
+    timeout: 180s
+    total_timeout: 300s
+    resources:
+      cpu: "500m"
+      memory: "256Mi"
+    network_access:
+      - "github.com"
+    tools:
+      - shell
+      - git
+      - file_read
+      - file_write
+  validation:
+    deterministic: []
+    agentic: []
+  review:
+    enabled: false
+  output:
+    format: branch

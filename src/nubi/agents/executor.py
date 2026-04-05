@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 from strands import Agent
+
+logger = logging.getLogger(__name__)
 
 EXECUTOR_SYSTEM_PROMPT = """\
 You are Nubi Executor, an autonomous coding agent running inside a sandboxed Kubernetes pod.
@@ -34,11 +37,30 @@ You are Nubi Executor, an autonomous coding agent running inside a sandboxed Kub
 5. Commit your changes with a clear, descriptive commit message.
 6. Push to the branch.
 
+## Gates
+After each work cycle, you MUST call discover_gates and run_gates to verify your work.
+
+Gate categories:
+- complexity: cyclomatic complexity per function (max {max_cc})
+- lint: code style and correctness (ruff, eslint)
+- test: test suite pass/fail (pytest, jest)
+
+If any gate FAILS:
+1. Read the gate output to understand what failed
+2. Fix the issues
+3. Call discover_gates and run_gates again
+4. Repeat until all gates pass or you run out of attempts
+
+You have {max_attempts} gate attempts maximum. Use them wisely.
+
 ## Quality Standards
 - Follow existing code conventions and patterns in the repository.
 - Write clean, well-tested code.
 - If tests exist, make sure they pass after your changes.
 - Do not introduce security vulnerabilities or hardcoded secrets.
+- Keep cyclomatic complexity under {max_cc} per function
+- No lint errors
+- Tests must pass
 
 When you are finished, state what you did and list the files you changed.\
 """
@@ -110,10 +132,25 @@ def create_executor_agent(
         repo=repo,
         base_branch=base_branch,
         task_branch=task_branch,
+        max_attempts=3,
+        max_cc=10,
     )
+
+    def tool_logger_callback(**kwargs: Any) -> None:
+        """Callback handler that logs tool calls and responses."""
+        event = kwargs.get("event", "")
+        if event == "tool_use":
+            tool_name = kwargs.get("tool_name", "unknown")
+            tool_args = str(kwargs.get("tool_args", {}))[:200]
+            logger.info("[ToolCall] %s(%s)", tool_name, tool_args)
+        elif event == "tool_result":
+            tool_name = kwargs.get("tool_name", "unknown")
+            result = str(kwargs.get("result", ""))[:200]
+            logger.info("[ToolResult] %s -> %s", tool_name, result)
+
     return Agent(
         model=model,
         tools=tools,
         system_prompt=system_prompt,
-        callback_handler=None,
+        callback_handler=tool_logger_callback,
     )

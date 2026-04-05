@@ -13,6 +13,7 @@ dependencies = [
     "strands-agents",
     "aiohttp",
     "openai",
+    "radon",
 ]
 
 [project.optional-dependencies]

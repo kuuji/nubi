@@ -1,0 +1,45 @@
+apiVersion: nubi.io/v1
+kind: TaskSpec
+metadata:
+  name: add-go-utils-to-playground
+  namespace: default
+spec:
+  description: |
+    Add 3 simple Go CLI utilities to the kuuji/nubi-playground repository on the main branch.
+
+    Create these files:
+
+    1. `cmd/greet/main.go` - A program that prints "Hello, World!" to stdout when run.
+
+    2. `cmd/add/main.go` - A program that takes two integers as command-line arguments and prints their sum.
+       Usage: ./add 1 2  (prints "3")
+
+    3. `cmd/version/main.go` - A program that prints "Version: 1.0.0" to stdout.
+
+    Also create a `go.mod` file for each at their respective paths (module: github.com/kuuji/nubi-playground/cmd/<name>).
+
+    Keep the code simple and clean. No external dependencies needed.
+  type: code-change
+  inputs:
+    repo: "kuuji/nubi-playground"
+    branch: main
+  constraints:
+    timeout: 300s
+    total_timeout: 420s
+    resources:
+      cpu: "500m"
+      memory: "256Mi"
+    network_access:
+      - "github.com"
+    tools:
+      - shell
+      - git
+      - file_read
+      - file_write
+  validation:
+    deterministic: []
+    agentic: []
+  review:
+    enabled: false
+  output:
+    format: branch

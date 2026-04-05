@@ -17,6 +17,10 @@ kind: ClusterRole
 metadata:
   name: nubi-controller
 rules:
+  # CRD access for kopf
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
   # Manage task namespaces (nubi-* prefix enforced by controller)
   - apiGroups: [""]
     resources: ["namespaces"]
@@ -43,7 +47,7 @@ rules:
   # TaskSpec CRD — read and update status
   - apiGroups: ["nubi.io"]
     resources: ["taskspecs"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["get", "list", "watch", "patch"]
   - apiGroups: ["nubi.io"]
     resources: ["taskspecs/status"]
     verbs: ["get", "update", "patch"]
@@ -98,7 +102,7 @@ spec:
       containers:
         - name: controller
           image: ghcr.io/kuuji/nubi-controller:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -115,6 +119,16 @@ spec:
           env:
             - name: NUBI_MASTER_SECRET_NAMESPACE
               value: nubi-system
+            - name: NUBI_RUNTIME_CLASS
+              value: ""
+            - name: NUBI_LLM_PROVIDER
+              value: "openai"
+            - name: NUBI_MODEL_ID
+              value: "moonshotai/kimi-k2"
+            - name: NUBI_LLM_BASE_URL
+              value: "https://openrouter.ai/api/v1"
+            - name: NUBI_AGENT_IMAGE_PULL_POLICY
+              value: "IfNotPresent"
           volumeMounts:
             - name: tmp
               mountPath: /tmp

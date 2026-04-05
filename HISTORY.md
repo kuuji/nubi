@@ -6,6 +6,21 @@
 <!-- - Files affected -->
 <!-- - Any decisions made during implementation -->
 
+## 2026-04-05 — E2E test run + infrastructure fixes
+
+- Ran first real e2e test: created TaskSpec → executor job in k3d → agent ran → committed code to GitHub
+- Found and fixed multiple issues:
+  - `NUBI_LLM_PROVIDER=anthropic` hardcoded but agent uses OpenRouter — fixed via deployment.yaml env vars
+  - `imagePullPolicy` defaults to Always for executor jobs — fixed via `NUBI_AGENT_IMAGE_PULL_POLICY=IfNotPresent`
+  - k3d needs `IfNotPresent` to use locally imported images instead of pulling from GHCR
+  - Controller Deployment manifest missing env vars that executor jobs need
+- Executor successfully called Kimi K2 via OpenRouter, ran agent loop, committed to `nubi/bootstrap-go-cli-playground` branch
+- Gate `diff_size` passed successfully
+- **BUG**: TaskSpec status doesn't persist — PATCH returns 200 but phase stays `Executing`
+- Created `scripts/e2e.sh` for repeatable e2e testing workflow
+- Updated Makefile `dev` target with proper env vars for k3d
+- Files: Makefile, manifests/deployment.yaml, scripts/e2e.sh, backlog/status-persistence-bug.md
+
 ## 2026-04-04 — Local dev harness + end-to-end fixes
 
 - Created local dev infrastructure: Makefile, k3d dev cluster scripts, smoke test, sample TaskSpec

@@ -7,6 +7,7 @@ from typing import Any
 
 from nubi.tools.files import configure as configure_files
 from nubi.tools.files import file_list, file_read, file_write
+from nubi.tools.gates import discover_gates, run_gates
 from nubi.tools.git import configure as configure_git
 from nubi.tools.git import git_commit, git_diff, git_log, git_push, git_status
 from nubi.tools.shell import configure as configure_shell
@@ -18,6 +19,7 @@ TOOL_GROUPS: dict[str, list[Callable[..., Any]]] = {
     "file_read": [file_read],
     "file_write": [file_write],
     "file_list": [file_list],
+    "gate": [discover_gates, run_gates],
 }
 
 

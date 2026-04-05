@@ -93,10 +93,17 @@ class TestSystemPrompt:
         assert "{repo}" in EXECUTOR_SYSTEM_PROMPT
         assert "{base_branch}" in EXECUTOR_SYSTEM_PROMPT
         assert "{task_branch}" in EXECUTOR_SYSTEM_PROMPT
+        assert "{max_attempts}" in EXECUTOR_SYSTEM_PROMPT
+        assert "{max_cc}" in EXECUTOR_SYSTEM_PROMPT
 
     def test_format_works(self) -> None:
         result = EXECUTOR_SYSTEM_PROMPT.format(
-            description="test", repo="owner/repo", base_branch="main", task_branch="nubi/t1"
+            description="test",
+            repo="owner/repo",
+            base_branch="main",
+            task_branch="nubi/t1",
+            max_attempts=3,
+            max_cc=10,
         )
         assert "test" in result
         assert "owner/repo" in result

@@ -1,0 +1,41 @@
+apiVersion: nubi.io/v1
+kind: TaskSpec
+metadata:
+  name: add-go-hello-to-playground
+  namespace: default
+spec:
+  description: |
+    Add a simple Go CLI project to the kuuji/nubi-playground repository on the main branch.
+    
+    Create a new file `cli/hello.go` with a simple Go program that:
+    - Has a main() function that prints "Hello, Nubi!" to stdout
+    - Has at least one helper function with some logic (e.g., a simple string manipulation)
+    - Has intentional lint issues: an unused import and an unused variable (to test lint gates)
+    
+    Also create `cli/go.mod` with module name "github.com/kuuji/nubi-playground/cli"
+    
+    This tests deterministic gates on a Go project.
+  type: code-change
+  inputs:
+    repo: "kuuji/nubi-playground"
+    branch: main
+  constraints:
+    timeout: 300s
+    total_timeout: 420s
+    resources:
+      cpu: "500m"
+      memory: "256Mi"
+    network_access:
+      - "github.com"
+    tools:
+      - shell
+      - git
+      - file_read
+      - file_write
+  validation:
+    deterministic: []
+    agentic: []
+  review:
+    enabled: false
+  output:
+    format: branch
