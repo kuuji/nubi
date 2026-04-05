@@ -35,6 +35,7 @@ from nubi.crd.defaults import (
     LABEL_MANAGED_BY,
     LABEL_STAGE,
     LABEL_TASK_ID,
+    LABEL_TASKSPEC_NAMESPACE,
 )
 from nubi.crd.schema import TaskSpecSpec
 from nubi.exceptions import SandboxError
@@ -60,6 +61,7 @@ def build_executor_job(
     ns_name: str,
     spec: TaskSpecSpec,
     secret_name: str,
+    taskspec_namespace: str,
 ) -> V1Job:
     """Construct a gVisor-sandboxed executor Job."""
     job_name = f"nubi-executor-{task_name}"[:63]
@@ -139,6 +141,7 @@ def build_executor_job(
             namespace=ns_name,
             labels={
                 LABEL_TASK_ID: task_name,
+                LABEL_TASKSPEC_NAMESPACE: taskspec_namespace,
                 LABEL_STAGE: "executor",
                 LABEL_MANAGED_BY: "nubi",
             },
@@ -168,12 +171,13 @@ async def create_executor_job(
     ns_name: str,
     spec: TaskSpecSpec,
     secret_name: str,
+    taskspec_namespace: str,
 ) -> str:
     """Build and create the executor Job. Idempotent (409 = no-op).
 
     Returns the Job name.
     """
-    job = build_executor_job(task_name, ns_name, spec, secret_name)
+    job = build_executor_job(task_name, ns_name, spec, secret_name, taskspec_namespace)
     job_name = job.metadata.name
     batch_api = BatchV1Api()
 

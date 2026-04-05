@@ -6,6 +6,23 @@
 <!-- - Files affected -->
 <!-- - Any decisions made during implementation -->
 
+## 2026-04-05 — Status persistence fix + robust live e2e harness
+
+- **Fixed status persistence bug**: Controller annotation patch was using wrong kwarg (`content_type` instead of `_content_type`) causing 400 errors
+- **Rewrote e2e.sh from scratch**:
+  - Unique per-run TaskSpec identity with deterministic naming
+  - Assertion-driven verification (TaskSpec phase, remote branch, file content)
+  - Artifact capture per-run with cleanup reporting
+  - Fail-fast detection for fatal pod states (ErrImagePull, ImagePullBackOff, etc.)
+  - Post-job hang detection when TaskSpec phase remains stuck
+  - Fixed Job terminal detection to handle non-standard condition ordering (SuccessCriteriaMet, FailureTarget before Complete/Failed)
+  - Controller rollout restart on `e2e.sh up` to pick up new images
+  - Scoped cleanup: only removes resources created by current run
+- **Added comprehensive e2e tests**: 16 contract tests covering success/failure paths, delayed terminal conditions, fatal pod states
+- **Live e2e passed end-to-end**: TaskSpec created → Job completed → GitHub branch pushed → phase updated to Done → cleanup successful
+- **Verification**: 300 tests passing, ruff/mypy clean
+- Files: scripts/e2e.sh, tests/test_e2e_script.py, src/nubi/controller/handlers.py, README.md, 7 task specs in tasks/
+
 ## 2026-04-05 — E2E test run + infrastructure fixes
 
 - Ran first real e2e test: created TaskSpec → executor job in k3d → agent ran → committed code to GitHub

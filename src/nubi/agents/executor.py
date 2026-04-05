@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import Any
 
 from strands import Agent
-
-logger = logging.getLogger(__name__)
 
 EXECUTOR_SYSTEM_PROMPT = """\
 You are Nubi Executor, an autonomous coding agent running inside a sandboxed Kubernetes pod.
@@ -136,21 +133,9 @@ def create_executor_agent(
         max_cc=10,
     )
 
-    def tool_logger_callback(**kwargs: Any) -> None:
-        """Callback handler that logs tool calls and responses."""
-        event = kwargs.get("event", "")
-        if event == "tool_use":
-            tool_name = kwargs.get("tool_name", "unknown")
-            tool_args = str(kwargs.get("tool_args", {}))[:200]
-            logger.info("[ToolCall] %s(%s)", tool_name, tool_args)
-        elif event == "tool_result":
-            tool_name = kwargs.get("tool_name", "unknown")
-            result = str(kwargs.get("result", ""))[:200]
-            logger.info("[ToolResult] %s -> %s", tool_name, result)
-
     return Agent(
         model=model,
         tools=tools,
         system_prompt=system_prompt,
-        callback_handler=tool_logger_callback,
+        callback_handler=None,
     )

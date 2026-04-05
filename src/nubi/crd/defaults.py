@@ -24,6 +24,7 @@ DEFAULT_CLEANUP_TTL_SUCCESS = 3600
 DEFAULT_CLEANUP_TTL_FAILURE = 0
 LABEL_TASK_ID = "nubi.io/task-id"
 LABEL_TASK_TYPE = "nubi.io/task-type"
+LABEL_TASKSPEC_NAMESPACE = "nubi.io/taskspec-namespace"
 LABEL_STAGE = "nubi.io/stage"
 LABEL_MANAGED_BY = "app.kubernetes.io/managed-by"
 

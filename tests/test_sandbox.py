@@ -8,6 +8,7 @@ import pytest
 from kubernetes_asyncio.client.exceptions import ApiException
 
 from nubi.controller.sandbox import build_executor_job, create_executor_job, parse_duration
+from nubi.crd.defaults import LABEL_TASKSPEC_NAMESPACE
 from nubi.crd.schema import TaskSpecSpec
 from nubi.exceptions import SandboxError
 
@@ -45,6 +46,7 @@ def _build(**kw: object) -> object:
         "ns_name": "nubi-task-1",
         "spec": _spec(),
         "secret_name": "nubi-executor-credentials",
+        "taskspec_namespace": "nubi-system",
     }
     defaults.update(kw)
     return build_executor_job(**defaults)
@@ -94,6 +96,7 @@ class TestBuildExecutorJobMetadata:
         labels = job.metadata.labels
         assert labels["nubi.io/task-id"] == "task-1"
         assert labels["nubi.io/stage"] == "executor"
+        assert labels[LABEL_TASKSPEC_NAMESPACE] == "nubi-system"
         assert labels["app.kubernetes.io/managed-by"] == "nubi"
 
     def test_no_owner_references(self) -> None:
@@ -285,22 +288,26 @@ class TestCreateExecutorJob:
 
     async def test_returns_job_name(self) -> None:
         result = await create_executor_job(
-            "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials"
+            "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials", "nubi-system"
         )
         assert result == "nubi-executor-task-1"
 
     async def test_calls_create_namespaced_job(self) -> None:
-        await create_executor_job("task-1", "nubi-task-1", _spec(), "nubi-executor-credentials")
+        await create_executor_job(
+            "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials", "nubi-system"
+        )
         self.mock_batch.create_namespaced_job.assert_awaited_once()
 
     async def test_409_returns_name(self) -> None:
         self.mock_batch.create_namespaced_job.side_effect = _api_exc(409, "Conflict")
         result = await create_executor_job(
-            "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials"
+            "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials", "nubi-system"
         )
         assert result == "nubi-executor-task-1"
 
     async def test_500_raises_sandbox_error(self) -> None:
         self.mock_batch.create_namespaced_job.side_effect = _api_exc(500, "Internal")
         with pytest.raises(SandboxError):
-            await create_executor_job("task-1", "nubi-task-1", _spec(), "nubi-executor-credentials")
+            await create_executor_job(
+                "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials", "nubi-system"
+            )
