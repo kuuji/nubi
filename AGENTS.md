@@ -8,8 +8,12 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
-# Run tests
-pytest tests/ -v
+# Run unit tests
+pytest tests/ -v --ignore=tests/integration/
+
+# Run integration tests (requires k3d — see tests/integration/README.md)
+./scripts/integration-setup.sh   # one-time cluster setup
+pytest tests/integration/ -v
 
 # Type check
 mypy src/nubi/
