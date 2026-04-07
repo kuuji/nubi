@@ -62,9 +62,12 @@ def build_executor_job(
     spec: TaskSpecSpec,
     secret_name: str,
     taskspec_namespace: str,
+    attempt: int = 1,
+    reviewer_feedback: str = "",
 ) -> V1Job:
     """Construct a gVisor-sandboxed executor Job."""
-    job_name = f"nubi-executor-{task_name}"[:63]
+    suffix = f"-a{attempt}" if attempt > 1 else ""
+    job_name = f"nubi-executor-{task_name}{suffix}"[:63]
     timeout = parse_duration(spec.constraints.timeout)
 
     env_from_secret = [
@@ -105,6 +108,9 @@ def build_executor_job(
     base_url = os.environ.get("NUBI_LLM_BASE_URL")
     if base_url:
         env_plain.append(V1EnvVar(name="NUBI_LLM_BASE_URL", value=base_url))
+
+    if reviewer_feedback:
+        env_plain.append(V1EnvVar(name="NUBI_REVIEWER_FEEDBACK", value=reviewer_feedback))
 
     agent_image = os.environ.get("NUBI_AGENT_IMAGE", DEFAULT_AGENT_IMAGE)
     pull_policy = os.environ.get("NUBI_AGENT_IMAGE_PULL_POLICY") or None
@@ -178,9 +184,11 @@ def build_reviewer_job(
     spec: TaskSpecSpec,
     secret_name: str,
     taskspec_namespace: str,
+    attempt: int = 1,
 ) -> V1Job:
     """Construct a gVisor-sandboxed reviewer Job."""
-    job_name = f"nubi-reviewer-{task_name}"[:63]
+    suffix = f"-a{attempt}" if attempt > 1 else ""
+    job_name = f"nubi-reviewer-{task_name}{suffix}"[:63]
     timeout = parse_duration(spec.constraints.timeout)
 
     env_from_secret = [
@@ -303,12 +311,15 @@ async def create_reviewer_job(
     spec: TaskSpecSpec,
     secret_name: str,
     taskspec_namespace: str,
+    attempt: int = 1,
 ) -> str:
     """Build and create the reviewer Job. Idempotent (409 = no-op).
 
     Returns the Job name.
     """
-    job = build_reviewer_job(task_name, ns_name, spec, secret_name, taskspec_namespace)
+    job = build_reviewer_job(
+        task_name, ns_name, spec, secret_name, taskspec_namespace, attempt=attempt
+    )
     job_name = job.metadata.name
     batch_api = BatchV1Api()
 
@@ -329,12 +340,17 @@ async def create_executor_job(
     spec: TaskSpecSpec,
     secret_name: str,
     taskspec_namespace: str,
+    attempt: int = 1,
+    reviewer_feedback: str = "",
 ) -> str:
     """Build and create the executor Job. Idempotent (409 = no-op).
 
     Returns the Job name.
     """
-    job = build_executor_job(task_name, ns_name, spec, secret_name, taskspec_namespace)
+    job = build_executor_job(
+        task_name, ns_name, spec, secret_name, taskspec_namespace,
+        attempt=attempt, reviewer_feedback=reviewer_feedback,
+    )
     job_name = job.metadata.name
     batch_api = BatchV1Api()
 

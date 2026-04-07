@@ -347,9 +347,12 @@ async def on_executor_completion(
             patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = "processed"
             return
 
+        # Determine attempt from executor status
+        reviewer_attempt = status.get("stages", {}).get("executor", {}).get("attempts", 1)
+
         try:
             reviewer_job = await create_reviewer_job(
-                name, ns_name, task_spec, secret_name, namespace
+                name, ns_name, task_spec, secret_name, namespace, attempt=reviewer_attempt
             )
         except SandboxError as exc:
             logger.error("Failed to create reviewer job: %s", exc)
@@ -364,6 +367,8 @@ async def on_executor_completion(
         patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
         patch.status["stages"] = stages_update
         patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = "processed"
+        # Reset reviewer annotation so the new reviewer completion can be detected
+        patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = ""
 
         logger.info(
             "Executor completed for task %s/%s, spawned reviewer job %s",
@@ -474,9 +479,14 @@ async def on_reviewer_completion(
             patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
             return
 
+        # Determine attempt number from previous executor status
+        prev_attempts = status.get("stages", {}).get("executor", {}).get("attempts", 1)
+        attempt = prev_attempts + 1
+
         try:
             executor_job = await create_executor_job(
-                name, ns_name, task_spec, secret_name, namespace
+                name, ns_name, task_spec, secret_name, namespace,
+                attempt=attempt, reviewer_feedback=review.feedback,
             )
         except SandboxError as exc:
             logger.error("Failed to re-create executor job: %s", exc)
@@ -491,8 +501,10 @@ async def on_reviewer_completion(
         patch.status["stages"] = {
             **status.get("stages", {}),
             "reviewer": reviewer_stage,
-            "executor": {"status": "running"},
+            "executor": {"status": "running", "attempts": attempt},
         }
+        # Reset both annotations so the new executor/reviewer cycle can be detected
+        patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = ""
         patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
         logger.info(
             "Task %s/%s reviewer requested changes, re-spawning executor %s",
