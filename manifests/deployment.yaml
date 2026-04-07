@@ -127,6 +127,13 @@ spec:
               value: "minimax/minimax-m2.7"
             - name: NUBI_LLM_BASE_URL
               value: "https://openrouter.ai/api/v1"
+            # Per-stage model overrides (reviewer falls back to shared config if unset)
+            # - name: NUBI_REVIEWER_LLM_PROVIDER
+            #   value: "openai"
+            # - name: NUBI_REVIEWER_MODEL_ID
+            #   value: "minimax/minimax-m2.7"
+            # - name: NUBI_REVIEWER_LLM_BASE_URL
+            #   value: "https://openrouter.ai/api/v1"
             - name: NUBI_AGENT_IMAGE_PULL_POLICY
               value: "IfNotPresent"
           volumeMounts:

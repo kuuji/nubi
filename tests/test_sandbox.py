@@ -409,6 +409,38 @@ class TestBuildReviewerJobEnvVars:
         e = self._env_by_name("LLM_API_KEY")
         assert e.value_from.secret_key_ref.name == "nubi-reviewer-credentials"
 
+    def test_uses_reviewer_model_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NUBI_MODEL_ID", "cheap/executor-model")
+        monkeypatch.setenv("NUBI_REVIEWER_MODEL_ID", "smart/reviewer-model")
+        job = _build_reviewer()
+        env = job.spec.template.spec.containers[0].env
+        model = [e for e in env if e.name == "NUBI_MODEL_ID"][0]
+        assert model.value == "smart/reviewer-model"
+
+    def test_falls_back_to_shared_model(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NUBI_MODEL_ID", "shared/model")
+        monkeypatch.delenv("NUBI_REVIEWER_MODEL_ID", raising=False)
+        job = _build_reviewer()
+        env = job.spec.template.spec.containers[0].env
+        model = [e for e in env if e.name == "NUBI_MODEL_ID"][0]
+        assert model.value == "shared/model"
+
+    def test_uses_reviewer_provider_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NUBI_LLM_PROVIDER", "openai")
+        monkeypatch.setenv("NUBI_REVIEWER_LLM_PROVIDER", "anthropic")
+        job = _build_reviewer()
+        env = job.spec.template.spec.containers[0].env
+        provider = [e for e in env if e.name == "NUBI_LLM_PROVIDER"][0]
+        assert provider.value == "anthropic"
+
+    def test_uses_reviewer_base_url_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("NUBI_LLM_BASE_URL", "https://openrouter.ai/api/v1")
+        monkeypatch.setenv("NUBI_REVIEWER_LLM_BASE_URL", "https://api.anthropic.com")
+        job = _build_reviewer()
+        env = job.spec.template.spec.containers[0].env
+        base_url = [e for e in env if e.name == "NUBI_LLM_BASE_URL"][0]
+        assert base_url.value == "https://api.anthropic.com"
+
 
 class TestCreateReviewerJob:
     @pytest.fixture(autouse=True)

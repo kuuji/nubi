@@ -207,17 +207,26 @@ def build_reviewer_job(
         V1EnvVar(name="NUBI_DESCRIPTION", value=spec.description),
         V1EnvVar(name="NUBI_TOOLS", value="shell,git_read,file_read,file_list,review"),
         V1EnvVar(name="NUBI_REVIEW_FOCUS", value=review_focus),
-        V1EnvVar(name="NUBI_LLM_PROVIDER", value=os.environ.get("NUBI_LLM_PROVIDER", "anthropic")),
+        V1EnvVar(
+            name="NUBI_LLM_PROVIDER",
+            value=os.environ.get(
+                "NUBI_REVIEWER_LLM_PROVIDER",
+                os.environ.get("NUBI_LLM_PROVIDER", "anthropic"),
+            ),
+        ),
         V1EnvVar(name="HOME", value="/workspace"),
         V1EnvVar(name="GIT_CONFIG_COUNT", value="1"),
         V1EnvVar(name="GIT_CONFIG_KEY_0", value="safe.directory"),
         V1EnvVar(name="GIT_CONFIG_VALUE_0", value="/workspace"),
     ]
 
-    model_id = os.environ.get("NUBI_MODEL_ID")
+    # Reviewer-specific model overrides, falling back to shared config
+    model_id = os.environ.get("NUBI_REVIEWER_MODEL_ID", os.environ.get("NUBI_MODEL_ID"))
     if model_id:
         env_plain.append(V1EnvVar(name="NUBI_MODEL_ID", value=model_id))
-    base_url = os.environ.get("NUBI_LLM_BASE_URL")
+    base_url = os.environ.get(
+        "NUBI_REVIEWER_LLM_BASE_URL", os.environ.get("NUBI_LLM_BASE_URL")
+    )
     if base_url:
         env_plain.append(V1EnvVar(name="NUBI_LLM_BASE_URL", value=base_url))
 
