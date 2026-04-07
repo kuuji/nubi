@@ -43,8 +43,8 @@ class TestStageCredentials:
         assert "github-token" in STAGE_CREDENTIALS["validator"]
         assert "llm-api-key" in STAGE_CREDENTIALS["validator"]
 
-    def test_reviewer_gets_only_llm(self) -> None:
-        assert "github-token" not in STAGE_CREDENTIALS["reviewer"]
+    def test_reviewer_gets_both(self) -> None:
+        assert "github-token" in STAGE_CREDENTIALS["reviewer"]
         assert "llm-api-key" in STAGE_CREDENTIALS["reviewer"]
 
     def test_gate_gets_nothing(self) -> None:
@@ -121,12 +121,12 @@ class TestEnsureStageSecretReviewer:
         result = await ensure_stage_secret("nubi-task-1", "task-1", "reviewer")
         assert result == "nubi-reviewer-credentials"
 
-    async def test_only_llm_key(self) -> None:
+    async def test_gets_both_keys(self) -> None:
         await ensure_stage_secret("nubi-task-1", "task-1", "reviewer")
         call_args = self.mock_core.create_namespaced_secret.call_args
         body = call_args.kwargs.get("body") or call_args[0][0]
         assert "llm-api-key" in body.data
-        assert "github-token" not in body.data
+        assert "github-token" in body.data
 
 
 # -- ensure_stage_secret — gate (no credentials) ----------------------------

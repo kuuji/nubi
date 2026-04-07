@@ -11,7 +11,7 @@ E2E_TASK_PREFIX="${E2E_TASK_PREFIX:-e2e-live}"
 E2E_REPO="${E2E_REPO:-kuuji/nubi-playground}"
 E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-600}"
 E2E_POLL_SECONDS="${E2E_POLL_SECONDS:-5}"
-E2E_POST_JOB_PHASE_TIMEOUT_SECONDS="${E2E_POST_JOB_PHASE_TIMEOUT_SECONDS:-15}"
+E2E_POST_JOB_PHASE_TIMEOUT_SECONDS="${E2E_POST_JOB_PHASE_TIMEOUT_SECONDS:-30}"
 E2E_KEEP_RESOURCES="${E2E_KEEP_RESOURCES:-0}"
 
 is_fatal_pod_reason() {
@@ -167,25 +167,64 @@ wait_for_job_terminal_status() {
     done
 }
 
-get_executor_job_terminal_status() {
+wait_for_named_job() {
     local namespace="$1"
+    local job_name="$2"
+    local timeout="$3"
+    local status=""
+    local fatal_reason
+    local attempts=0
+    local max_attempts
+    max_attempts="$(max_poll_attempts "${timeout}" "${E2E_POLL_SECONDS}")"
+
+    while true; do
+        fatal_reason="$(get_executor_pod_failure_reason "${namespace}" || true)"
+        if [ -n "${fatal_reason}" ]; then
+            printf 'Failed: %s' "${fatal_reason}"
+            return 0
+        fi
+
+        if status="$(get_job_terminal_status_by_name "${namespace}" "${job_name}")"; then
+            if [ "${status}" = "Complete" ] || [ "${status}" = "Failed" ]; then
+                printf '%s' "${status}"
+                return 0
+            fi
+        fi
+
+        attempts=$((attempts + 1))
+        if [ "${attempts}" -ge "${max_attempts}" ]; then
+            return 1
+        fi
+
+        sleep "${E2E_POLL_SECONDS}"
+    done
+}
+
+get_job_terminal_status_by_name() {
+    local namespace="$1"
+    local job_name="$2"
     local succeeded
     local failed
     local condition_types
 
-    succeeded=$(kubectl get job -n "${namespace}" --context "${CONTEXT}" -o jsonpath='{.items[0].status.succeeded}' 2>/dev/null || true)
+    # Check if job exists
+    if ! kubectl get job "${job_name}" -n "${namespace}" --context "${CONTEXT}" >/dev/null 2>&1; then
+        return 1
+    fi
+
+    succeeded=$(kubectl get job "${job_name}" -n "${namespace}" --context "${CONTEXT}" -o jsonpath='{.status.succeeded}' 2>/dev/null || true)
     if [[ "${succeeded}" =~ ^[0-9]+$ ]] && [ "${succeeded}" -gt 0 ]; then
         printf 'Complete'
         return 0
     fi
 
-    failed=$(kubectl get job -n "${namespace}" --context "${CONTEXT}" -o jsonpath='{.items[0].status.failed}' 2>/dev/null || true)
+    failed=$(kubectl get job "${job_name}" -n "${namespace}" --context "${CONTEXT}" -o jsonpath='{.status.failed}' 2>/dev/null || true)
     if [[ "${failed}" =~ ^[0-9]+$ ]] && [ "${failed}" -gt 0 ]; then
         printf 'Failed'
         return 0
     fi
 
-    condition_types=$(kubectl get job -n "${namespace}" --context "${CONTEXT}" -o jsonpath='{.items[0].status.conditions[*].type}' 2>/dev/null || true)
+    condition_types=$(kubectl get job "${job_name}" -n "${namespace}" --context "${CONTEXT}" -o jsonpath='{.status.conditions[*].type}' 2>/dev/null || true)
     case " ${condition_types} " in
         *" Complete "*)
             printf 'Complete'
@@ -198,6 +237,17 @@ get_executor_job_terminal_status() {
     esac
 
     return 1
+}
+
+# Backward-compat wrapper: checks first job in namespace
+get_executor_job_terminal_status() {
+    local namespace="$1"
+    local job_name
+    job_name="$(kubectl get job -n "${namespace}" --context "${CONTEXT}" -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+    if [ -z "${job_name}" ]; then
+        return 1
+    fi
+    get_job_terminal_status_by_name "${namespace}" "${job_name}"
 }
 
 get_executor_pod_failure_reason() {
@@ -364,19 +414,25 @@ cmd_test() {
     local task_name
     local task_namespace
     local task_branch
+    local executor_job_name
+    local reviewer_job_name
     local target_file
     local expected_content
     local work_dir
     local task_file
     local terminal_phase
     local job_status
+    local reviewer_status
     local workspace_branch
     local head_sha
     local remote_content
+    local review_json
 
     task_name="$(create_task_name)"
     task_namespace="nubi-${task_name}"
     task_branch="nubi/${task_name}"
+    executor_job_name="nubi-executor-${task_name}"
+    reviewer_job_name="nubi-reviewer-${task_name}"
     target_file="TEST-${task_name}.txt"
     expected_content="Hello from Nubi live e2e ${task_name}"
 
@@ -386,9 +442,11 @@ cmd_test() {
     fail_run() {
         local message="$1"
         record_artifact "${work_dir}/taskspec-status.yaml" get taskspec "${task_name}" -n "${TASKSPEC_NAMESPACE}" -o yaml
-        record_artifact "${work_dir}/executor.log" logs "job/nubi-executor-${task_name}" -n "${task_namespace}"
-        record_artifact "${work_dir}/executor-job.txt" describe job "nubi-executor-${task_name}" -n "${task_namespace}"
-        record_artifact "${work_dir}/executor-pods.txt" get pods -n "${task_namespace}" -o wide
+        record_artifact "${work_dir}/executor.log" logs "job/${executor_job_name}" -n "${task_namespace}"
+        record_artifact "${work_dir}/executor-job.txt" describe job "${executor_job_name}" -n "${task_namespace}"
+        record_artifact "${work_dir}/reviewer.log" logs "job/${reviewer_job_name}" -n "${task_namespace}"
+        record_artifact "${work_dir}/reviewer-job.txt" describe job "${reviewer_job_name}" -n "${task_namespace}"
+        record_artifact "${work_dir}/all-pods.txt" get pods -n "${task_namespace}" -o wide
         error "${message}"
         exit 1
     }
@@ -431,39 +489,60 @@ spec:
     deterministic: []
     agentic: []
   review:
-    enabled: false
+    enabled: true
   output:
     format: branch
 EOF
 
     kubectl apply -f "${task_file}" --context "${CONTEXT}"
 
+    # --- Stage 1: Wait for executor job ---
+    info "Waiting for namespace ${task_namespace}..."
     if ! wait_for_namespace "${task_namespace}" "${E2E_TIMEOUT_SECONDS}"; then
         fail_run "Timed out waiting for namespace ${task_namespace}"
     fi
 
-    if ! job_status="$(wait_for_job_terminal_status "${task_namespace}" "${E2E_TIMEOUT_SECONDS}")"; then
+    info "Waiting for executor job ${executor_job_name}..."
+    if ! job_status="$(wait_for_named_job "${task_namespace}" "${executor_job_name}" "${E2E_TIMEOUT_SECONDS}")"; then
         fail_run "Timed out waiting for executor job to reach a terminal state"
     fi
 
     if [ "${job_status}" != "Complete" ]; then
         fail_run "Executor job finished with status ${job_status}"
     fi
+    info "Executor job completed"
 
-    if ! terminal_phase="$(wait_for_terminal_phase "${task_name}" "${E2E_POST_JOB_PHASE_TIMEOUT_SECONDS}")"; then
-        terminal_phase="$(get_taskspec_phase "${task_name}")"
-        fail_run "executor Job completed, but TaskSpec phase remained ${terminal_phase:-<empty>} after ${E2E_POST_JOB_PHASE_TIMEOUT_SECONDS}s; controller status did not persist"
+    # --- Stage 2: Wait for reviewer job ---
+    info "Waiting for reviewer job ${reviewer_job_name}..."
+    if ! reviewer_status="$(wait_for_named_job "${task_namespace}" "${reviewer_job_name}" "${E2E_TIMEOUT_SECONDS}")"; then
+        fail_run "Timed out waiting for reviewer job to appear or reach a terminal state"
     fi
 
-    record_artifact "${work_dir}/taskspec-status.yaml" get taskspec "${task_name}" -n "${TASKSPEC_NAMESPACE}" -o yaml
-    record_artifact "${work_dir}/executor.log" logs "job/nubi-executor-${task_name}" -n "${task_namespace}"
-    record_artifact "${work_dir}/executor-job.txt" describe job "nubi-executor-${task_name}" -n "${task_namespace}"
-    record_artifact "${work_dir}/executor-pods.txt" get pods -n "${task_namespace}" -o wide
+    if [ "${reviewer_status}" != "Complete" ]; then
+        fail_run "Reviewer job finished with status ${reviewer_status}"
+    fi
+    info "Reviewer job completed"
 
+    # --- Stage 3: Wait for terminal phase ---
+    if ! terminal_phase="$(wait_for_terminal_phase "${task_name}" "${E2E_POST_JOB_PHASE_TIMEOUT_SECONDS}")"; then
+        terminal_phase="$(get_taskspec_phase "${task_name}")"
+        fail_run "Reviewer Job completed, but TaskSpec phase remained ${terminal_phase:-<empty>} after ${E2E_POST_JOB_PHASE_TIMEOUT_SECONDS}s; controller status did not persist"
+    fi
+
+    # --- Collect artifacts ---
+    record_artifact "${work_dir}/taskspec-status.yaml" get taskspec "${task_name}" -n "${TASKSPEC_NAMESPACE}" -o yaml
+    record_artifact "${work_dir}/executor.log" logs "job/${executor_job_name}" -n "${task_namespace}"
+    record_artifact "${work_dir}/executor-job.txt" describe job "${executor_job_name}" -n "${task_namespace}"
+    record_artifact "${work_dir}/reviewer.log" logs "job/${reviewer_job_name}" -n "${task_namespace}"
+    record_artifact "${work_dir}/reviewer-job.txt" describe job "${reviewer_job_name}" -n "${task_namespace}"
+    record_artifact "${work_dir}/all-pods.txt" get pods -n "${task_namespace}" -o wide
+
+    # --- Verify phase ---
     if [ "${terminal_phase}" != "Done" ]; then
         fail_run "TaskSpec finished in phase ${terminal_phase}; expected Done"
     fi
 
+    # --- Verify TaskSpec status fields ---
     workspace_branch="$(kubectl get taskspec "${task_name}" -n "${TASKSPEC_NAMESPACE}" --context "${CONTEXT}" -o jsonpath='{.status.workspace.branch}' 2>/dev/null || true)"
     if [ "${workspace_branch}" != "${task_branch}" ]; then
         fail_run "Expected status.workspace.branch=${task_branch}, got '${workspace_branch}'"
@@ -474,6 +553,7 @@ EOF
         fail_run "Expected non-empty status.workspace.headSHA"
     fi
 
+    # --- Verify remote branch and files ---
     if ! verify_remote_branch_exists "${E2E_REPO}" "${task_branch}"; then
         fail_run "Remote branch ${task_branch} was not found on ${E2E_REPO}"
     fi
@@ -483,10 +563,18 @@ EOF
         fail_run "Remote file ${target_file} did not match expected content"
     fi
 
+    # --- Verify review.json exists on branch ---
+    review_json="$(fetch_remote_file_content "${E2E_REPO}" "${task_branch}" ".nubi/review.json" 2>/dev/null || true)"
+    if [ -z "${review_json}" ]; then
+        fail_run "Expected .nubi/review.json on branch ${task_branch}, but file not found"
+    fi
+    info "review.json found on branch"
+
     info "Live e2e test passed"
     info "  TaskSpec: ${task_name}"
     info "  Namespace: ${task_namespace}"
     info "  Branch: ${task_branch}"
+    info "  Review: $(echo "${review_json}" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("decision","?"))' 2>/dev/null || echo 'parse error')"
 }
 
 case "${1:-}" in

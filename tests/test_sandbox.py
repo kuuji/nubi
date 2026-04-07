@@ -7,7 +7,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from kubernetes_asyncio.client.exceptions import ApiException
 
-from nubi.controller.sandbox import build_executor_job, create_executor_job, parse_duration
+from nubi.controller.sandbox import (
+    build_executor_job,
+    build_reviewer_job,
+    create_executor_job,
+    create_reviewer_job,
+    parse_duration,
+)
 from nubi.crd.defaults import LABEL_TASKSPEC_NAMESPACE
 from nubi.crd.schema import TaskSpecSpec
 from nubi.exceptions import SandboxError
@@ -258,6 +264,11 @@ class TestBuildExecutorJobEnvVars:
         e = self._env_by_name("NUBI_TOOLS")
         assert e.value == "shell,git,file_read"
 
+    def test_git_safe_directory_via_env(self) -> None:
+        assert self._env_by_name("GIT_CONFIG_COUNT").value == "1"
+        assert self._env_by_name("GIT_CONFIG_KEY_0").value == "safe.directory"
+        assert self._env_by_name("GIT_CONFIG_VALUE_0").value == "/workspace"
+
 
 # -- build_executor_job — volumes -------------------------------------------
 
@@ -310,4 +321,123 @@ class TestCreateExecutorJob:
         with pytest.raises(SandboxError):
             await create_executor_job(
                 "task-1", "nubi-task-1", _spec(), "nubi-executor-credentials", "nubi-system"
+            )
+
+
+# -- build_reviewer_job -------------------------------------------------------
+
+
+def _build_reviewer(**kw: object) -> object:
+    """Build a reviewer Job with defaults."""
+    defaults: dict = {
+        "task_name": "task-1",
+        "ns_name": "nubi-task-1",
+        "spec": _spec(),
+        "secret_name": "nubi-reviewer-credentials",
+        "taskspec_namespace": "nubi-system",
+    }
+    defaults.update(kw)
+    return build_reviewer_job(**defaults)
+
+
+class TestBuildReviewerJobMetadata:
+    def test_job_name_format(self) -> None:
+        job = _build_reviewer(task_name="task-1")
+        assert job.metadata.name == "nubi-reviewer-task-1"
+
+    def test_job_name_truncated_to_63(self) -> None:
+        job = _build_reviewer(task_name="a" * 200)
+        assert len(job.metadata.name) <= 63
+
+    def test_labels_stage_reviewer(self) -> None:
+        job = _build_reviewer(task_name="task-1")
+        labels = job.metadata.labels
+        assert labels["nubi.io/stage"] == "reviewer"
+        assert labels["nubi.io/task-id"] == "task-1"
+
+
+class TestBuildReviewerJobContainer:
+    def _container(self, **kw: object) -> object:
+        job = _build_reviewer(**kw)
+        return job.spec.template.spec.containers[0]
+
+    def test_name(self) -> None:
+        c = self._container()
+        assert c.name == "reviewer"
+
+    def test_command_override(self) -> None:
+        c = self._container()
+        assert c.command == ["python", "-m", "nubi.reviewer_entrypoint"]
+
+    def test_security_context_matches_executor(self) -> None:
+        c = self._container()
+        sec = c.security_context
+        assert sec.run_as_non_root is True
+        assert sec.run_as_user == 65534
+        assert sec.allow_privilege_escalation is False
+        assert sec.capabilities.drop == ["ALL"]
+
+
+class TestBuildReviewerJobEnvVars:
+    def _env(self) -> list:
+        job = _build_reviewer()
+        return job.spec.template.spec.containers[0].env
+
+    def _env_by_name(self, name: str) -> object:
+        for e in self._env():
+            if e.name == name:
+                return e
+        raise AssertionError(f"Env var {name} not found")
+
+    def test_nubi_tools_reviewer_set(self) -> None:
+        e = self._env_by_name("NUBI_TOOLS")
+        assert e.value == "shell,git_read,file_read,file_list,review"
+
+    def test_nubi_review_focus(self) -> None:
+        spec = _spec()
+        # Default spec has no review focus
+        job = build_reviewer_job("task-1", "ns", spec, "secret", "nubi-system")
+        env = job.spec.template.spec.containers[0].env
+        focus = [e for e in env if e.name == "NUBI_REVIEW_FOCUS"][0]
+        assert focus.value == ""
+
+    def test_github_token_from_secret(self) -> None:
+        e = self._env_by_name("GITHUB_TOKEN")
+        assert e.value_from.secret_key_ref.name == "nubi-reviewer-credentials"
+
+    def test_llm_api_key_from_secret(self) -> None:
+        e = self._env_by_name("LLM_API_KEY")
+        assert e.value_from.secret_key_ref.name == "nubi-reviewer-credentials"
+
+
+class TestCreateReviewerJob:
+    @pytest.fixture(autouse=True)
+    def _mock_k8s(self) -> None:
+        batch_p = patch("nubi.controller.sandbox.BatchV1Api")
+        self.mock_batch_cls = batch_p.start()
+        self.mock_batch = MagicMock()
+        self.mock_batch_cls.return_value = self.mock_batch
+        self.mock_batch.create_namespaced_job = AsyncMock()
+
+        yield
+        batch_p.stop()
+
+    async def test_returns_job_name(self) -> None:
+        result = await create_reviewer_job(
+            "task-1", "nubi-task-1", _spec(), "nubi-reviewer-credentials", "nubi-system"
+        )
+        assert result == "nubi-reviewer-task-1"
+
+    async def test_409_returns_name(self) -> None:
+        self.mock_batch.create_namespaced_job.side_effect = _api_exc(409, "Conflict")
+        result = await create_reviewer_job(
+            "task-1", "nubi-task-1", _spec(), "nubi-reviewer-credentials", "nubi-system"
+        )
+        assert result == "nubi-reviewer-task-1"
+
+    async def test_500_raises_sandbox_error(self) -> None:
+        self.mock_batch.create_namespaced_job.side_effect = _api_exc(500, "Internal")
+        with pytest.raises(SandboxError):
+            await create_reviewer_job(
+                "task-1", "nubi-task-1", _spec(), "nubi-reviewer-credentials", "nubi-system"
             )

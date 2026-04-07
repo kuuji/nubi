@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 STAGE_CREDENTIALS: dict[str, list[str]] = {
     "executor": [CREDENTIAL_GITHUB_TOKEN, CREDENTIAL_LLM_API_KEY],
     "validator": [CREDENTIAL_GITHUB_TOKEN, CREDENTIAL_LLM_API_KEY],
-    "reviewer": [CREDENTIAL_LLM_API_KEY],
+    "reviewer": [CREDENTIAL_GITHUB_TOKEN, CREDENTIAL_LLM_API_KEY],
     "gate": [],
 }
 

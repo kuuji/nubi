@@ -59,6 +59,7 @@ class GatePolicy(BaseModel):
     block: list[GateCategory] = Field(default_factory=list)
     thresholds: GateThreshold = Field(default_factory=GateThreshold)
     gate_timeout: int = 300
+    base_branch: str = "main"
 
 
 def write_gates_result(result: GatesResult, workspace: str) -> None:

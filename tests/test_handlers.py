@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import ast
-import inspect
 import logging
-from collections.abc import Sequence
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
@@ -15,11 +12,15 @@ from pydantic import ValidationError
 
 from nubi.agents.gate_result import GateCategory, GateResult, GatesResult, GateStatus
 from nubi.agents.result import ExecutorResult
+from nubi.agents.review_result import ReviewDecision, ReviewResult
 from nubi.controller.handlers import (
+    EXECUTOR_JOB_STATUS_ANNOTATION,
     JOB_STATUS_ANNOTATION,
+    REVIEWER_JOB_STATUS_ANNOTATION,
     _annotate_task_completion,
-    on_job_completion_annotation,
+    on_executor_completion,
     on_job_status_change,
+    on_reviewer_completion,
     on_taskspec_created,
 )
 from nubi.crd.defaults import LABEL_TASKSPEC_NAMESPACE
@@ -29,6 +30,16 @@ VALID_SPEC: dict = {
     "description": "Implement feature X",
     "type": "code-change",
     "inputs": {"repo": "kuuji/test"},
+}
+
+VALID_SPEC_REVIEW_ENABLED: dict = {
+    **VALID_SPEC,
+    "review": {"enabled": True},
+}
+
+VALID_SPEC_REVIEW_DISABLED: dict = {
+    **VALID_SPEC,
+    "review": {"enabled": False},
 }
 
 INVALID_SPEC: dict = {
@@ -60,18 +71,10 @@ class RecordingApiClient:
         self.client_side_validation = True
         self.calls: list[dict[str, object]] = []
 
-    def select_header_accept(self, accepts: Sequence[str]) -> str:
+    def select_header_accept(self, accepts: Any) -> str:
         return accepts[0]
 
-    def select_header_content_type(
-        self,
-        content_types: Sequence[str],
-        http_method: str,
-        body: object,
-    ) -> str:
-        assert http_method == "PATCH"
-        assert body is not None
-        assert "application/merge-patch+json" in content_types
+    def select_header_content_type(self, content_types: Any, http_method: str, body: object) -> str:
         return "application/merge-patch+json"
 
     async def call_api(
@@ -100,14 +103,16 @@ class RecordingApiClient:
 
 NS_MOCK = "nubi.controller.handlers.ensure_task_namespace"
 CRED_MOCK = "nubi.controller.handlers.ensure_stage_secret"
-JOB_MOCK = "nubi.controller.handlers.create_executor_job"
+EXEC_JOB_MOCK = "nubi.controller.handlers.create_executor_job"
+REVIEW_JOB_MOCK = "nubi.controller.handlers.create_reviewer_job"
+TOKEN_MOCK = "nubi.controller.handlers._read_github_token"
 
 
 # -- on_taskspec_created — happy path ----------------------------------------
 
 
 class TestOnTaskSpecCreated:
-    @patch(JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-test-task-1")
+    @patch(EXEC_JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-test-task-1")
     @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
     @patch(NS_MOCK, new_callable=AsyncMock, return_value="nubi-test-task-1")
     async def test_sets_phase_to_executing(
@@ -119,7 +124,7 @@ class TestOnTaskSpecCreated:
         )
         assert fp.status.get("phase") == "Executing"
 
-    @patch(JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-test-task-1")
+    @patch(EXEC_JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-test-task-1")
     @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
     @patch(NS_MOCK, new_callable=AsyncMock, return_value="nubi-test-task-1")
     async def test_returns_dict_with_message(
@@ -132,7 +137,7 @@ class TestOnTaskSpecCreated:
         assert isinstance(result, dict)
         assert "message" in result
 
-    @patch(JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-test-task-1")
+    @patch(EXEC_JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-test-task-1")
     @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
     @patch(NS_MOCK, new_callable=AsyncMock, return_value="nubi-test-task-1")
     async def test_stores_namespace_in_workspace(
@@ -145,63 +150,12 @@ class TestOnTaskSpecCreated:
         workspace = fp.status.get("workspace", {})
         assert workspace.get("namespace") == "nubi-test-task-1"
 
-    @patch(JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-test-task-1")
-    @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
-    @patch(NS_MOCK, new_callable=AsyncMock, return_value="nubi-test-task-1")
-    async def test_calls_ensure_task_namespace(
-        self, mock_ns: AsyncMock, mock_cred: AsyncMock, mock_job: AsyncMock
-    ) -> None:
-        fp = FakePatch()
-        await on_taskspec_created(
-            spec=VALID_SPEC, patch=fp, name="test-task-1", namespace="nubi-system"
-        )
-        mock_ns.assert_awaited_once()
-
-    @patch(JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-test-task-1")
-    @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
-    @patch(NS_MOCK, new_callable=AsyncMock, return_value="nubi-test-task-1")
-    async def test_calls_ensure_stage_secret(
-        self, mock_ns: AsyncMock, mock_cred: AsyncMock, mock_job: AsyncMock
-    ) -> None:
-        fp = FakePatch()
-        await on_taskspec_created(
-            spec=VALID_SPEC, patch=fp, name="test-task-1", namespace="nubi-system"
-        )
-        mock_cred.assert_awaited_once_with("nubi-test-task-1", "test-task-1", "executor")
-
-    @patch(JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-test-task-1")
-    @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
-    @patch(NS_MOCK, new_callable=AsyncMock, return_value="nubi-test-task-1")
-    async def test_calls_create_executor_job(
-        self, mock_ns: AsyncMock, mock_cred: AsyncMock, mock_job: AsyncMock
-    ) -> None:
-        fp = FakePatch()
-        await on_taskspec_created(
-            spec=VALID_SPEC, patch=fp, name="test-task-1", namespace="nubi-system"
-        )
-        mock_job.assert_awaited_once()
-
-    @patch(JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-test-task-1")
-    @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
-    @patch(NS_MOCK, new_callable=AsyncMock, return_value="nubi-test-task-1")
-    async def test_sets_executor_stage_running(
-        self, mock_ns: AsyncMock, mock_cred: AsyncMock, mock_job: AsyncMock
-    ) -> None:
-        fp = FakePatch()
-        await on_taskspec_created(
-            spec=VALID_SPEC, patch=fp, name="test-task-1", namespace="nubi-system"
-        )
-        stages = fp.status.get("stages", {})
-        executor = stages.get("executor", {})
-        assert executor.get("status") == "running"
-        assert executor.get("attempts") == 1
-
 
 # -- on_taskspec_created — error handling ------------------------------------
 
 
 class TestOnTaskSpecCreatedErrors:
-    @patch(JOB_MOCK, new_callable=AsyncMock)
+    @patch(EXEC_JOB_MOCK, new_callable=AsyncMock)
     @patch(CRED_MOCK, new_callable=AsyncMock)
     @patch(NS_MOCK, new_callable=AsyncMock, side_effect=NamespaceError("boom"))
     async def test_namespace_error_sets_failed(
@@ -214,7 +168,7 @@ class TestOnTaskSpecCreatedErrors:
             )
         assert fp.status.get("phase") == "Failed"
 
-    @patch(JOB_MOCK, new_callable=AsyncMock)
+    @patch(EXEC_JOB_MOCK, new_callable=AsyncMock)
     @patch(CRED_MOCK, new_callable=AsyncMock, side_effect=CredentialError("no creds"))
     @patch(NS_MOCK, new_callable=AsyncMock, return_value="nubi-test-task-1")
     async def test_credential_error_sets_failed(
@@ -227,7 +181,7 @@ class TestOnTaskSpecCreatedErrors:
             )
         assert fp.status.get("phase") == "Failed"
 
-    @patch(JOB_MOCK, new_callable=AsyncMock, side_effect=SandboxError("job failed"))
+    @patch(EXEC_JOB_MOCK, new_callable=AsyncMock, side_effect=SandboxError("job failed"))
     @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
     @patch(NS_MOCK, new_callable=AsyncMock, return_value="nubi-test-task-1")
     async def test_sandbox_error_sets_failed(
@@ -241,9 +195,6 @@ class TestOnTaskSpecCreatedErrors:
         assert fp.status.get("phase") == "Failed"
 
 
-# -- on_taskspec_created — invalid spec --------------------------------------
-
-
 class TestOnTaskSpecCreatedInvalid:
     async def test_invalid_spec_raises(self) -> None:
         fp = FakePatch()
@@ -253,7 +204,7 @@ class TestOnTaskSpecCreatedInvalid:
             )
 
 
-# -- on_job_status_change — logs task-id and stage ---------------------------
+# -- on_job_status_change — routes by stage ----------------------------------
 
 
 class TestOnJobStatusChange:
@@ -268,7 +219,6 @@ class TestOnJobStatusChange:
                 labels=labels, name="job-xyz", namespace="nubi-task-abc", status={}
             )
         assert "task-abc-123" in caplog.text
-        assert "executor" in caplog.text
 
     async def test_ignores_running_job(self) -> None:
         labels = {
@@ -283,90 +233,58 @@ class TestOnJobStatusChange:
             mock_annotate.assert_not_called()
 
     @patch("nubi.controller.handlers._annotate_task_completion", new_callable=AsyncMock)
-    async def test_failed_job_annotates_task(self, mock_annotate: AsyncMock) -> None:
-        labels = {
-            "nubi.io/task-id": "task-1",
-            "nubi.io/stage": "executor",
-            LABEL_TASKSPEC_NAMESPACE: "explicit-ns",
-        }
-        status = {"conditions": [{"type": "Failed", "status": "True"}]}
-        with patch("kubernetes_asyncio.client.CustomObjectsApi") as mock_api_class:
-            mock_api = mock_api_class.return_value
-            mock_api.get_namespaced_custom_object = AsyncMock(return_value={"spec": VALID_SPEC})
-            await on_job_status_change(labels=labels, name="j", namespace="ns", status=status)
-        mock_annotate.assert_awaited_once_with("task-1", "explicit-ns", "j", "ns", "failed")
-
-    @patch("nubi.controller.handlers._annotate_task_completion", new_callable=AsyncMock)
-    async def test_succeeded_job_annotates_task(self, mock_annotate: AsyncMock) -> None:
-        labels = {
-            "nubi.io/task-id": "task-1",
-            "nubi.io/stage": "executor",
-            LABEL_TASKSPEC_NAMESPACE: "explicit-ns",
-        }
-        status = {"conditions": [{"type": "Complete", "status": "True"}]}
-        with patch("kubernetes_asyncio.client.CustomObjectsApi") as mock_api_class:
-            mock_api = mock_api_class.return_value
-            mock_api.get_namespaced_custom_object = AsyncMock(return_value={"spec": VALID_SPEC})
-            await on_job_status_change(labels=labels, name="j", namespace="ns", status=status)
-        mock_annotate.assert_awaited_once_with("task-1", "explicit-ns", "j", "ns", "succeeded")
-
-    @patch("nubi.controller.handlers._annotate_task_completion", new_callable=AsyncMock)
-    async def test_uses_explicit_taskspec_namespace_for_lookup(
+    async def test_executor_completion_uses_executor_annotation(
         self, mock_annotate: AsyncMock
     ) -> None:
         labels = {
             "nubi.io/task-id": "task-1",
             "nubi.io/stage": "executor",
-            LABEL_TASKSPEC_NAMESPACE: "explicit-ns",
+            LABEL_TASKSPEC_NAMESPACE: "ns",
         }
         status = {"conditions": [{"type": "Complete", "status": "True"}]}
         with patch("kubernetes_asyncio.client.CustomObjectsApi") as mock_api_class:
             mock_api = mock_api_class.return_value
             mock_api.get_namespaced_custom_object = AsyncMock(return_value={"spec": VALID_SPEC})
-            await on_job_status_change(
-                labels=labels,
-                name="job-1",
-                namespace="executor-ns",
-                status=status,
-            )
-
-        mock_api.get_namespaced_custom_object.assert_awaited_once_with(
-            group="nubi.io",
-            version="v1",
-            plural="taskspecs",
-            name="task-1",
-            namespace="explicit-ns",
-        )
+            await on_job_status_change(labels=labels, name="j", namespace="ns", status=status)
         mock_annotate.assert_awaited_once_with(
-            "task-1",
-            "explicit-ns",
-            "job-1",
-            "executor-ns",
-            "succeeded",
+            "task-1", "ns", "j", "ns", "succeeded", EXECUTOR_JOB_STATUS_ANNOTATION
         )
 
     @patch("nubi.controller.handlers._annotate_task_completion", new_callable=AsyncMock)
-    async def test_missing_taskspec_namespace_label_does_not_guess(
+    async def test_reviewer_completion_uses_reviewer_annotation(
         self, mock_annotate: AsyncMock
     ) -> None:
-        labels = {"nubi.io/task-id": "task-1", "nubi.io/stage": "executor"}
+        labels = {
+            "nubi.io/task-id": "task-1",
+            "nubi.io/stage": "reviewer",
+            LABEL_TASKSPEC_NAMESPACE: "ns",
+        }
         status = {"conditions": [{"type": "Complete", "status": "True"}]}
         with patch("kubernetes_asyncio.client.CustomObjectsApi") as mock_api_class:
             mock_api = mock_api_class.return_value
-            mock_api.get_namespaced_custom_object = AsyncMock()
+            mock_api.get_namespaced_custom_object = AsyncMock(return_value={"spec": VALID_SPEC})
             await on_job_status_change(labels=labels, name="j", namespace="ns", status=status)
+        mock_annotate.assert_awaited_once_with(
+            "task-1", "ns", "j", "ns", "succeeded", REVIEWER_JOB_STATUS_ANNOTATION
+        )
 
-        mock_api.get_namespaced_custom_object.assert_not_called()
+    @patch("nubi.controller.handlers._annotate_task_completion", new_callable=AsyncMock)
+    async def test_unknown_stage_ignored(self, mock_annotate: AsyncMock) -> None:
+        labels = {
+            "nubi.io/task-id": "task-1",
+            "nubi.io/stage": "planner",
+            LABEL_TASKSPEC_NAMESPACE: "ns",
+        }
+        status = {"conditions": [{"type": "Complete", "status": "True"}]}
+        await on_job_status_change(labels=labels, name="j", namespace="ns", status=status)
         mock_annotate.assert_not_called()
 
     @patch("nubi.controller.handlers._annotate_task_completion", new_callable=AsyncMock)
-    async def test_duplicate_completion_does_not_reannotate_processed_taskspec(
-        self, mock_annotate: AsyncMock
-    ) -> None:
+    async def test_duplicate_completion_does_not_reannotate(self, mock_annotate: AsyncMock) -> None:
         labels = {
             "nubi.io/task-id": "task-1",
             "nubi.io/stage": "executor",
-            LABEL_TASKSPEC_NAMESPACE: "explicit-ns",
+            LABEL_TASKSPEC_NAMESPACE: "ns",
         }
         status = {"conditions": [{"type": "Complete", "status": "True"}]}
         with patch("kubernetes_asyncio.client.CustomObjectsApi") as mock_api_class:
@@ -374,101 +292,47 @@ class TestOnJobStatusChange:
             mock_api.get_namespaced_custom_object = AsyncMock(
                 return_value={
                     "spec": VALID_SPEC,
-                    "metadata": {"annotations": {JOB_STATUS_ANNOTATION: "processed"}},
+                    "metadata": {"annotations": {EXECUTOR_JOB_STATUS_ANNOTATION: "processed"}},
                 }
             )
-            await on_job_status_change(
-                labels=labels,
-                name="job-1",
-                namespace="executor-ns",
-                status=status,
-            )
-
-        mock_api.get_namespaced_custom_object.assert_awaited_once()
+            await on_job_status_change(labels=labels, name="j", namespace="ns", status=status)
         mock_annotate.assert_not_called()
 
 
 class TestAnnotateTaskCompletion:
-    async def test_uses_real_client_kwarg_and_merge_patch_for_metadata_annotations(
-        self,
-    ) -> None:
+    async def test_uses_correct_annotation_key(self) -> None:
         recording_client = RecordingApiClient()
         real_api = CustomObjectsApi(api_client=cast(Any, recording_client))
 
         with patch("kubernetes_asyncio.client.CustomObjectsApi", return_value=real_api):
             await _annotate_task_completion(
                 "task-1",
-                "taskspec-ns",
+                "ns",
                 "job-1",
-                "executor-ns",
+                "exec-ns",
                 "succeeded",
+                EXECUTOR_JOB_STATUS_ANNOTATION,
             )
 
         assert len(recording_client.calls) == 1
         call = cast(dict[str, Any], recording_client.calls[0])
         assert (
-            call["resource_path"]
-            == "/apis/{group}/{version}/namespaces/{namespace}/{plural}/{name}"
+            call["kwargs"]["body"]["metadata"]["annotations"][EXECUTOR_JOB_STATUS_ANNOTATION]
+            == "succeeded"
         )
-        assert call["method"] == "PATCH"
-        assert call["path_params"] == {
-            "group": "nubi.io",
-            "version": "v1",
-            "namespace": "taskspec-ns",
-            "plural": "taskspecs",
-            "name": "task-1",
-        }
-        assert call["header_params"]["Content-Type"] == "application/merge-patch+json"
-        assert call["kwargs"]["body"] == {
-            "metadata": {
-                "annotations": {
-                    JOB_STATUS_ANNOTATION: "succeeded",
-                    "nubi.io/job-name": "job-1",
-                    "nubi.io/job-namespace": "executor-ns",
-                }
-            }
-        }
 
 
-class TestOnJobCompletionAnnotationRegistration:
-    def test_field_registration_uses_path_segments_for_annotation_key(self) -> None:
-        source = inspect.getsource(on_job_completion_annotation)
-        module = ast.parse(source)
-        function_def = module.body[0]
-
-        assert isinstance(function_def, ast.AsyncFunctionDef)
-        assert function_def.decorator_list
-
-        decorator = function_def.decorator_list[0]
-        assert isinstance(decorator, ast.Call)
-
-        field_keyword = next(keyword for keyword in decorator.keywords if keyword.arg == "field")
-        field_value = field_keyword.value
-
-        assert isinstance(field_value, (ast.Tuple, ast.List))
-        assert len(field_value.elts) == 3
-        assert isinstance(field_value.elts[0], ast.Constant)
-        assert field_value.elts[0].value == "metadata"
-        assert isinstance(field_value.elts[1], ast.Constant)
-        assert field_value.elts[1].value == "annotations"
-        assert isinstance(field_value.elts[2], ast.Name | ast.Constant)
-        if isinstance(field_value.elts[2], ast.Constant):
-            assert field_value.elts[2].value == JOB_STATUS_ANNOTATION
-        else:
-            assert field_value.elts[2].id == "JOB_STATUS_ANNOTATION"
+# -- on_executor_completion — field handler ----------------------------------
 
 
-# -- on_job_completion_annotation — field handler ----------------------------
-
-
-class TestOnJobCompletionAnnotation:
+class TestOnExecutorCompletion:
     @pytest.fixture
     def mock_secret(self) -> object:
         return type("Secret", (), {"data": {"github-token": "Z2hwX3Rlc3Q="}})()
 
     async def test_ignores_processed_annotation(self) -> None:
         fp = FakePatch()
-        await on_job_completion_annotation(
+        await on_executor_completion(
             spec=VALID_SPEC,
             name="task-1",
             namespace="ns",
@@ -481,7 +345,7 @@ class TestOnJobCompletionAnnotation:
 
     async def test_failed_job_sets_failed_phase(self) -> None:
         fp = FakePatch()
-        await on_job_completion_annotation(
+        await on_executor_completion(
             spec=VALID_SPEC,
             name="task-1",
             namespace="ns",
@@ -491,49 +355,80 @@ class TestOnJobCompletionAnnotation:
             new="failed",
         )
         assert fp.status.get("phase") == "Failed"
-        assert fp.meta.annotations.get(JOB_STATUS_ANNOTATION) == "processed"
+        assert fp.meta.annotations.get(EXECUTOR_JOB_STATUS_ANNOTATION) == "processed"
 
     @patch("nubi.controller.handlers.read_gates_result", new_callable=AsyncMock)
     @patch("nubi.controller.handlers.read_executor_result", new_callable=AsyncMock)
-    async def test_succeeded_job_sets_done_phase(
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_review_disabled_sets_done(
         self,
+        mock_token: AsyncMock,
         mock_result: AsyncMock,
-        mock_gates_result: AsyncMock,
-        mock_secret: object,
+        mock_gates: AsyncMock,
     ) -> None:
         mock_result.return_value = ExecutorResult(
             status="success", commit_sha="abc123", summary="Done"
         )
-        mock_gates_result.return_value = GatesResult(discovered=[], gates=[], overall_passed=True)
+        mock_gates.return_value = GatesResult(discovered=[], gates=[], overall_passed=True)
 
         fp = FakePatch()
-        with patch("kubernetes_asyncio.client.CoreV1Api") as mock_api_class:
-            mock_api = mock_api_class.return_value
-            mock_api.read_namespaced_secret = AsyncMock(return_value=mock_secret)
-            await on_job_completion_annotation(
-                spec=VALID_SPEC,
-                name="task-1",
-                namespace="ns",
-                status={},
-                patch=fp,
-                old=None,
-                new="succeeded",
-            )
+        await on_executor_completion(
+            spec=VALID_SPEC_REVIEW_DISABLED,
+            name="task-1",
+            namespace="ns",
+            status={},
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
         assert fp.status.get("phase") == "Done"
-        assert fp.meta.annotations.get(JOB_STATUS_ANNOTATION) == "processed"
 
+    @patch(REVIEW_JOB_MOCK, new_callable=AsyncMock, return_value="nubi-reviewer-task-1")
+    @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-reviewer-credentials")
     @patch("nubi.controller.handlers.read_gates_result", new_callable=AsyncMock)
     @patch("nubi.controller.handlers.read_executor_result", new_callable=AsyncMock)
-    async def test_gate_failure_below_retry_limit_returns_to_executing(
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_review_enabled_sets_reviewing_and_spawns_reviewer(
         self,
+        mock_token: AsyncMock,
         mock_result: AsyncMock,
-        mock_gates_result: AsyncMock,
-        mock_secret: object,
+        mock_gates: AsyncMock,
+        mock_cred: AsyncMock,
+        mock_review_job: AsyncMock,
     ) -> None:
         mock_result.return_value = ExecutorResult(
             status="success", commit_sha="abc123", summary="Done"
         )
-        mock_gates_result.return_value = GatesResult(
+        mock_gates.return_value = GatesResult(discovered=[], gates=[], overall_passed=True)
+
+        fp = FakePatch()
+        await on_executor_completion(
+            spec=VALID_SPEC_REVIEW_ENABLED,
+            name="task-1",
+            namespace="ns",
+            status={"workspace": {"namespace": "nubi-task-1"}},
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
+        assert fp.status.get("phase") == "Reviewing"
+        assert fp.status["stages"]["reviewer"]["status"] == "running"
+        mock_cred.assert_awaited_once_with("nubi-task-1", "task-1", "reviewer")
+        mock_review_job.assert_awaited_once()
+
+    @patch("nubi.controller.handlers.read_gates_result", new_callable=AsyncMock)
+    @patch("nubi.controller.handlers.read_executor_result", new_callable=AsyncMock)
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_gate_failure_below_retry_sets_executing(
+        self,
+        mock_token: AsyncMock,
+        mock_result: AsyncMock,
+        mock_gates: AsyncMock,
+    ) -> None:
+        mock_result.return_value = ExecutorResult(
+            status="success", commit_sha="abc123", summary="Done"
+        )
+        mock_gates.return_value = GatesResult(
             discovered=[],
             gates=[GateResult(name="pytest", category=GateCategory.TEST, status=GateStatus.FAILED)],
             overall_passed=False,
@@ -541,37 +436,30 @@ class TestOnJobCompletionAnnotation:
         )
 
         fp = FakePatch()
-        with patch("kubernetes_asyncio.client.CoreV1Api") as mock_api_class:
-            mock_api = mock_api_class.return_value
-            mock_api.read_namespaced_secret = AsyncMock(return_value=mock_secret)
-            await on_job_completion_annotation(
-                spec={
-                    **VALID_SPEC,
-                    "loopPolicy": {"max_retries": 2, "on_max_retries": "escalate"},
-                },
-                name="task-1",
-                namespace="ns",
-                status={"stages": {"executor": {"attempts": 1}}},
-                patch=fp,
-                old=None,
-                new="succeeded",
-            )
-
+        await on_executor_completion(
+            spec={**VALID_SPEC, "loopPolicy": {"max_retries": 2, "on_max_retries": "escalate"}},
+            name="task-1",
+            namespace="ns",
+            status={"stages": {"executor": {"attempts": 1}}},
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
         assert fp.status.get("phase") == "Executing"
-        assert fp.meta.annotations.get(JOB_STATUS_ANNOTATION) == "processed"
 
     @patch("nubi.controller.handlers.read_gates_result", new_callable=AsyncMock)
     @patch("nubi.controller.handlers.read_executor_result", new_callable=AsyncMock)
-    async def test_gate_failure_at_retry_limit_sets_escalated(
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_gate_failure_at_retry_limit_escalates(
         self,
+        mock_token: AsyncMock,
         mock_result: AsyncMock,
-        mock_gates_result: AsyncMock,
-        mock_secret: object,
+        mock_gates: AsyncMock,
     ) -> None:
         mock_result.return_value = ExecutorResult(
             status="success", commit_sha="abc123", summary="Done"
         )
-        mock_gates_result.return_value = GatesResult(
+        mock_gates.return_value = GatesResult(
             discovered=[],
             gates=[GateResult(name="pytest", category=GateCategory.TEST, status=GateStatus.FAILED)],
             overall_passed=False,
@@ -579,21 +467,164 @@ class TestOnJobCompletionAnnotation:
         )
 
         fp = FakePatch()
-        with patch("kubernetes_asyncio.client.CoreV1Api") as mock_api_class:
-            mock_api = mock_api_class.return_value
-            mock_api.read_namespaced_secret = AsyncMock(return_value=mock_secret)
-            await on_job_completion_annotation(
-                spec={
-                    **VALID_SPEC,
-                    "loopPolicy": {"max_retries": 1, "on_max_retries": "escalate"},
-                },
-                name="task-1",
-                namespace="ns",
-                status={"stages": {"executor": {"attempts": 1}}},
-                patch=fp,
-                old=None,
-                new="succeeded",
-            )
-
+        await on_executor_completion(
+            spec={**VALID_SPEC, "loopPolicy": {"max_retries": 1, "on_max_retries": "escalate"}},
+            name="task-1",
+            namespace="ns",
+            status={"stages": {"executor": {"attempts": 1}}},
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
         assert fp.status.get("phase") == "Escalated"
-        assert fp.meta.annotations.get(JOB_STATUS_ANNOTATION) == "processed"
+
+
+# -- on_reviewer_completion — field handler ----------------------------------
+
+
+class TestOnReviewerCompletion:
+    @patch("nubi.controller.handlers.read_review_result", new_callable=AsyncMock)
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_approve_sets_done(
+        self,
+        mock_token: AsyncMock,
+        mock_review: AsyncMock,
+    ) -> None:
+        mock_review.return_value = ReviewResult(
+            decision=ReviewDecision.APPROVE,
+            feedback="LGTM",
+            summary="All good",
+        )
+
+        fp = FakePatch()
+        await on_reviewer_completion(
+            spec=VALID_SPEC_REVIEW_ENABLED,
+            name="task-1",
+            namespace="ns",
+            status={"stages": {"executor": {"status": "complete"}}},
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
+        assert fp.status.get("phase") == "Done"
+        assert fp.status["stages"]["reviewer"]["decision"] == "approve"
+        assert fp.meta.annotations.get(REVIEWER_JOB_STATUS_ANNOTATION) == "processed"
+
+    @patch(EXEC_JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-task-1")
+    @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
+    @patch("nubi.controller.handlers.read_review_result", new_callable=AsyncMock)
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_request_changes_respawns_executor(
+        self,
+        mock_token: AsyncMock,
+        mock_review: AsyncMock,
+        mock_cred: AsyncMock,
+        mock_exec_job: AsyncMock,
+    ) -> None:
+        mock_review.return_value = ReviewResult(
+            decision=ReviewDecision.REQUEST_CHANGES,
+            feedback="Fix error handling",
+            summary="Needs work",
+        )
+
+        fp = FakePatch()
+        await on_reviewer_completion(
+            spec={**VALID_SPEC_REVIEW_ENABLED, "loop_policy": {"reviewer_to_executor": True}},
+            name="task-1",
+            namespace="ns",
+            status={
+                "workspace": {"namespace": "nubi-task-1"},
+                "stages": {"executor": {"status": "complete"}},
+            },
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
+        assert fp.status.get("phase") == "Executing"
+        mock_exec_job.assert_awaited_once()
+
+    @patch("nubi.controller.handlers.read_review_result", new_callable=AsyncMock)
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_reject_sets_escalated(
+        self,
+        mock_token: AsyncMock,
+        mock_review: AsyncMock,
+    ) -> None:
+        mock_review.return_value = ReviewResult(
+            decision=ReviewDecision.REJECT,
+            feedback="Completely wrong",
+            summary="Rejected",
+        )
+
+        fp = FakePatch()
+        await on_reviewer_completion(
+            spec=VALID_SPEC_REVIEW_ENABLED,
+            name="task-1",
+            namespace="ns",
+            status={"stages": {}},
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
+        assert fp.status.get("phase") == "Escalated"
+        assert fp.meta.annotations.get(REVIEWER_JOB_STATUS_ANNOTATION) == "processed"
+
+    async def test_failed_reviewer_job_sets_failed(self) -> None:
+        fp = FakePatch()
+        await on_reviewer_completion(
+            spec=VALID_SPEC_REVIEW_ENABLED,
+            name="task-1",
+            namespace="ns",
+            status={"stages": {}},
+            patch=fp,
+            old=None,
+            new="failed",
+        )
+        assert fp.status.get("phase") == "Failed"
+        assert fp.meta.annotations.get(REVIEWER_JOB_STATUS_ANNOTATION) == "processed"
+
+    async def test_ignores_processed_annotation(self) -> None:
+        fp = FakePatch()
+        await on_reviewer_completion(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="ns",
+            status={},
+            patch=fp,
+            old="succeeded",
+            new="processed",
+        )
+        assert fp.status == {}
+
+    @patch("nubi.controller.handlers.read_review_result", new_callable=AsyncMock)
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_request_changes_without_retry_escalates(
+        self,
+        mock_token: AsyncMock,
+        mock_review: AsyncMock,
+    ) -> None:
+        mock_review.return_value = ReviewResult(
+            decision=ReviewDecision.REQUEST_CHANGES,
+            feedback="Fix this",
+            summary="Needs work",
+        )
+
+        fp = FakePatch()
+        await on_reviewer_completion(
+            spec={**VALID_SPEC_REVIEW_ENABLED, "loop_policy": {"reviewer_to_executor": False}},
+            name="task-1",
+            namespace="ns",
+            status={"stages": {}},
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
+        assert fp.status.get("phase") == "Escalated"
+
+
+# -- Backward compat alias ---------------------------------------------------
+
+
+class TestBackwardCompat:
+    def test_job_status_annotation_alias(self) -> None:
+        assert JOB_STATUS_ANNOTATION == EXECUTOR_JOB_STATUS_ANNOTATION

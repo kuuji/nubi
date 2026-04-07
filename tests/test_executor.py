@@ -81,10 +81,14 @@ class TestCreateExecutorAgent:
 
     @patch("nubi.agents.executor.Agent")
     @patch("nubi.agents.executor.create_model")
-    def test_callback_handler_is_none(self, mock_model: MagicMock, mock_agent: MagicMock) -> None:
+    def test_callback_handler_is_logging(
+        self, mock_model: MagicMock, mock_agent: MagicMock
+    ) -> None:
+        from nubi.agents.logging_handler import LoggingCallbackHandler
+
         create_executor_agent(tools=[], description="t", repo="r", base_branch="b", task_branch="t")
         call_kwargs = mock_agent.call_args.kwargs
-        assert call_kwargs["callback_handler"] is None
+        assert isinstance(call_kwargs["callback_handler"], LoggingCallbackHandler)
 
 
 class TestSystemPrompt:

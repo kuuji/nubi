@@ -10,16 +10,19 @@ from nubi.tools.files import file_list, file_read, file_write
 from nubi.tools.gates import discover_gates, run_gates
 from nubi.tools.git import configure as configure_git
 from nubi.tools.git import git_commit, git_diff, git_log, git_push, git_status
+from nubi.tools.review import submit_review
 from nubi.tools.shell import configure as configure_shell
 from nubi.tools.shell import run_shell
 
 TOOL_GROUPS: dict[str, list[Callable[..., Any]]] = {
     "shell": [run_shell],
     "git": [git_diff, git_log, git_commit, git_push, git_status],
+    "git_read": [git_diff, git_log, git_status],
     "file_read": [file_read],
     "file_write": [file_write],
     "file_list": [file_list],
     "gate": [discover_gates, run_gates],
+    "review": [submit_review],
 }
 
 

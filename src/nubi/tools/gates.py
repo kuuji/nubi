@@ -23,7 +23,7 @@ MAX_OUTPUT_LENGTH = 5000
 PYTHON_TOOLS: dict[str, list[str]] = {
     "lint": ["ruff", "ruff check"],
     "test": ["pytest"],
-    "complexity": ["radon", "radon --max-cc -j"],
+    "complexity": ["radon", "radon cc -j"],
 }
 NODE_TOOLS: dict[str, list[str]] = {
     "lint": ["eslint"],
@@ -365,7 +365,7 @@ def _run_complexity_gate(
         )
 
     max_cc = gate_policy.thresholds.max_cc
-    cmd = f"radon --max-cc {max_cc} -j {workspace}"
+    cmd = f"radon cc -j {workspace}"
 
     try:
         result = subprocess.run(
@@ -381,18 +381,22 @@ def _run_complexity_gate(
 
         if result.returncode == 0:
             try:
-                issues = json.loads(result.stdout)
-                if isinstance(issues, list):
-                    for item in issues:
-                        if isinstance(item, dict) and item.get("complexity", 0) > max_cc:
-                            return GateResult(
-                                name=name,
-                                category=GateCategory.COMPLEXITY,
-                                status=GateStatus.FAILED,
-                                output=output,
-                                command=cmd,
-                                duration_seconds=duration,
-                            )
+                # radon cc -j outputs {filename: [{name, complexity, ...}, ...]}
+                file_results = json.loads(result.stdout)
+                if isinstance(file_results, dict):
+                    for _file, functions in file_results.items():
+                        if isinstance(functions, list):
+                            for func in functions:
+                                cc = func.get("complexity", 0)
+                                if isinstance(cc, (int, float)) and cc > max_cc:
+                                    return GateResult(
+                                        name=name,
+                                        category=GateCategory.COMPLEXITY,
+                                        status=GateStatus.FAILED,
+                                        output=output,
+                                        command=cmd,
+                                        duration_seconds=duration,
+                                    )
                 return GateResult(
                     name=name,
                     category=GateCategory.COMPLEXITY,
@@ -445,9 +449,11 @@ def _run_diff_size_gate(
     name: str, workspace: str, gate_policy: GatePolicy, timeout: int, start_time: float
 ) -> GateResult:
     """Run a diff_size gate, checking total changed lines against threshold."""
+    base_ref = f"origin/{gate_policy.base_branch}"
+    diff_cmd = f"git diff --stat {base_ref}..HEAD"
     try:
         result = subprocess.run(
-            ["git", "diff", "--stat", "origin/main..HEAD"],
+            ["git", "diff", "--stat", f"{base_ref}..HEAD"],
             cwd=workspace,
             capture_output=True,
             text=True,
@@ -474,7 +480,7 @@ def _run_diff_size_gate(
                                 category=GateCategory.DIFF_SIZE,
                                 status=GateStatus.FAILED,
                                 output=msg,
-                                command="git diff --stat origin/main..HEAD",
+                                command=diff_cmd,
                                 duration_seconds=duration,
                             )
                         break
@@ -486,7 +492,7 @@ def _run_diff_size_gate(
             category=GateCategory.DIFF_SIZE,
             status=GateStatus.PASSED,
             output=output,
-            command="git diff --stat origin/main..HEAD",
+            command=diff_cmd,
             duration_seconds=duration,
         )
     except subprocess.TimeoutExpired:
@@ -495,7 +501,7 @@ def _run_diff_size_gate(
             category=GateCategory.DIFF_SIZE,
             status=GateStatus.FAILED,
             output=f"git diff timed out after {timeout}s",
-            command="git diff --stat origin/main..HEAD",
+            command=diff_cmd,
             duration_seconds=time.time() - start_time,
             error="timeout",
         )
@@ -505,7 +511,7 @@ def _run_diff_size_gate(
             category=GateCategory.DIFF_SIZE,
             status=GateStatus.FAILED,
             output=str(e),
-            command="git diff --stat origin/main..HEAD",
+            command=diff_cmd,
             duration_seconds=time.time() - start_time,
             error=str(e),
         )

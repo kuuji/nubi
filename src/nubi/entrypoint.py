@@ -9,7 +9,7 @@ import sys
 from typing import Any
 
 from nubi.agents.executor import create_executor_agent
-from nubi.agents.gate_result import GatePolicy, GatesResult, write_gates_result
+from nubi.agents.gate_result import GatePolicy, GatesResult, GateStatus, write_gates_result
 from nubi.agents.result import ExecutorResult, write_result
 from nubi.tools import get_tools
 from nubi.tools.git import git_clone
@@ -59,12 +59,22 @@ def _run_gates_loop(
     from nubi.tools.gates import discover_gates, run_gates
 
     attempt = 1
+    gate_feedback: str | None = None
 
     while attempt <= max_attempts:
         logger.info("=== Gate loop attempt %d/%d ===", attempt, max_attempts)
 
+        if gate_feedback:
+            prompt = (
+                f"Your previous attempt failed gate checks. Fix the issues and try again.\n\n"
+                f"## Gate Failures\n{gate_feedback}\n\n"
+                f"## Original Task\n{description}"
+            )
+        else:
+            prompt = f"Complete this task:\n\n{description}"
+
         logger.info("Running agent to do work...")
-        response = agent(f"Complete this task:\n\n{description}")
+        response = agent(prompt)
         logger.info("Agent completed. Response preview: %s", str(response)[:500])
 
         # Commit any uncommitted changes the agent may have made
@@ -98,6 +108,9 @@ def _run_gates_loop(
             )
             write_gates_result(gates_result, workspace)
             if attempt < max_attempts:
+                gate_feedback = (
+                    "No code changes were produced. You must modify files to complete the task."
+                )
                 logger.info("Retrying with feedback to produce code...")
                 attempt += 1
                 continue
@@ -123,7 +136,18 @@ def _run_gates_loop(
             logger.info("All gates passed on attempt %d", attempt)
             return gates_result
 
-        logger.info("Gates failed on attempt %d: retrying", attempt)
+        # Build feedback from failed gates for the next attempt
+        failed_gates = [g for g in gates_result.gates if g.status == GateStatus.FAILED]
+        feedback_parts = []
+        for g in failed_gates:
+            feedback_parts.append(f"### {g.name} ({g.category.value}) — FAILED")
+            if g.command:
+                feedback_parts.append(f"Command: `{g.command}`")
+            if g.output:
+                feedback_parts.append(f"Output:\n```\n{g.output[:2000]}\n```")
+        gate_feedback = "\n\n".join(feedback_parts)
+
+        logger.info("Gates failed on attempt %d: retrying with feedback", attempt)
         attempt += 1
 
     logger.warning("Gates did not pass after %d attempts", max_attempts)
@@ -145,6 +169,7 @@ def main() -> int:
     api_key = os.environ["LLM_API_KEY"]
     max_attempts = int(os.environ.get("NUBI_MAX_ATTEMPTS", "3"))
     gate_timeout = int(os.environ.get("NUBI_GATE_TIMEOUT", "300"))
+    reviewer_feedback = os.environ.get("NUBI_REVIEWER_FEEDBACK", "")
 
     task_branch = f"nubi/{task_id}"
     logger.info(
@@ -156,10 +181,16 @@ def main() -> int:
         max_attempts,
     )
 
-    gate_policy = GatePolicy(gate_timeout=gate_timeout)
+    gate_policy = GatePolicy(gate_timeout=gate_timeout, base_branch=branch)
 
     try:
         git_clone(repo, branch, token, workspace)
+
+        # Ensure agent-generated artifacts don't pollute the repo
+        gitignore_path = os.path.join(workspace, ".gitignore")
+        if not os.path.exists(gitignore_path):
+            with open(gitignore_path, "w") as f:
+                f.write(".cache/\n__pycache__/\n*.pyc\n")
 
         subprocess.run(
             ["git", "checkout", "-b", task_branch],
@@ -182,10 +213,18 @@ def main() -> int:
             api_key=api_key,
         )
 
+        effective_description = description
+        if reviewer_feedback:
+            effective_description = (
+                f"A reviewer has requested changes to your previous attempt.\n\n"
+                f"## Reviewer Feedback\n{reviewer_feedback}\n\n"
+                f"## Original Task\n{description}"
+            )
+
         gates_result = _run_gates_loop(
             agent,
             workspace,
-            description,
+            effective_description,
             branch,
             gate_policy,
             max_attempts,

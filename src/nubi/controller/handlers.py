@@ -10,8 +10,8 @@ import kopf
 
 from nubi.controller.credentials import ensure_stage_secret
 from nubi.controller.namespace import ensure_task_namespace
-from nubi.controller.results import read_executor_result, read_gates_result
-from nubi.controller.sandbox import create_executor_job
+from nubi.controller.results import read_executor_result, read_gates_result, read_review_result
+from nubi.controller.sandbox import create_executor_job, create_reviewer_job
 from nubi.crd.defaults import (
     CREDENTIAL_GITHUB_TOKEN,
     LABEL_TASKSPEC_NAMESPACE,
@@ -23,9 +23,18 @@ from nubi.exceptions import CredentialError, NamespaceError, ResultError, Sandbo
 
 logger = logging.getLogger(__name__)
 
-JOB_STATUS_ANNOTATION = "nubi.io/job-completed"
+EXECUTOR_JOB_STATUS_ANNOTATION = "nubi.io/executor-job-completed"
+REVIEWER_JOB_STATUS_ANNOTATION = "nubi.io/reviewer-job-completed"
 JOB_NAME_ANNOTATION = "nubi.io/job-name"
 JOB_NAMESPACE_ANNOTATION = "nubi.io/job-namespace"
+
+# Keep for backward compat in tests that reference it
+JOB_STATUS_ANNOTATION = EXECUTOR_JOB_STATUS_ANNOTATION
+
+_STAGE_ANNOTATIONS = {
+    "executor": EXECUTOR_JOB_STATUS_ANNOTATION,
+    "reviewer": REVIEWER_JOB_STATUS_ANNOTATION,
+}
 
 
 @kopf.on.create("taskspecs", group="nubi.io", version="v1")  # type: ignore[arg-type]
@@ -102,7 +111,9 @@ async def on_job_status_change(
     if not succeeded and not failed:
         return
 
-    if stage != "executor":
+    annotation_key = _STAGE_ANNOTATIONS.get(stage)
+    if not annotation_key:
+        logger.warning("Unknown stage %r on Job %s/%s for task %s", stage, namespace, name, task_id)
         return
 
     if not taskspec_namespace:
@@ -132,18 +143,25 @@ async def on_job_status_change(
         return
 
     annotations = taskspec.get("metadata", {}).get("annotations", {})
-    if annotations.get(JOB_STATUS_ANNOTATION) == "processed":
+    if annotations.get(annotation_key) == "processed":
         logger.info(
-            "TaskSpec %s/%s already processed job completion; skipping duplicate event",
+            "TaskSpec %s/%s already processed %s completion; skipping duplicate event",
             taskspec_namespace,
             task_id,
+            stage,
         )
         return
 
     job_status = "succeeded" if succeeded else "failed"
-    await _annotate_task_completion(task_id, taskspec_namespace, name, namespace, job_status)
+    await _annotate_task_completion(
+        task_id, taskspec_namespace, name, namespace, job_status, annotation_key
+    )
     logger.info(
-        "TaskSpec %s/%s annotated with job completion: %s", taskspec_namespace, task_id, job_status
+        "TaskSpec %s/%s annotated with %s completion: %s",
+        taskspec_namespace,
+        task_id,
+        stage,
+        job_status,
     )
 
 
@@ -153,21 +171,16 @@ async def _annotate_task_completion(
     job_name: str,
     job_namespace: str,
     job_status: str,
+    annotation_key: str,
 ) -> None:
     from kubernetes_asyncio.client import CustomObjectsApi
 
     custom_api = CustomObjectsApi()
-    logger.info(
-        "Annotating TaskSpec %s/%s with job completion: %s",
-        taskspec_namespace,
-        task_id,
-        job_status,
-    )
 
     patch = {
         "metadata": {
             "annotations": {
-                JOB_STATUS_ANNOTATION: job_status,
+                annotation_key: job_status,
                 JOB_NAME_ANNOTATION: job_name,
                 JOB_NAMESPACE_ANNOTATION: job_namespace,
             }
@@ -184,16 +197,29 @@ async def _annotate_task_completion(
         body=patch,
         _content_type="application/merge-patch+json",
     )
-    logger.info("TaskSpec %s/%s annotated successfully", taskspec_namespace, task_id)
+    logger.info("TaskSpec %s/%s annotated with %s", taskspec_namespace, task_id, annotation_key)
+
+
+async def _read_github_token() -> str:
+    """Read the GitHub token from the master secret."""
+    import base64
+
+    from kubernetes_asyncio.client import CoreV1Api
+
+    core_api = CoreV1Api()
+    secret = await core_api.read_namespaced_secret(
+        name=MASTER_SECRET_NAME, namespace=MASTER_SECRET_NAMESPACE
+    )
+    return base64.b64decode(secret.data[CREDENTIAL_GITHUB_TOKEN]).decode()
 
 
 @kopf.on.field(  # type: ignore[arg-type]
     "taskspecs",
     group="nubi.io",
     version="v1",
-    field=("metadata", "annotations", JOB_STATUS_ANNOTATION),
+    field=("metadata", "annotations", EXECUTOR_JOB_STATUS_ANNOTATION),
 )
-async def on_job_completion_annotation(
+async def on_executor_completion(
     spec: dict[str, Any],
     name: str,
     namespace: str,
@@ -206,7 +232,7 @@ async def on_job_completion_annotation(
     if not new or new == "processed":
         return
 
-    logger.info("Processing job completion annotation for TaskSpec %s/%s: %s", namespace, name, new)
+    logger.info("Processing executor completion for TaskSpec %s/%s: %s", namespace, name, new)
 
     normalized_spec = dict(spec)
     if "loop_policy" not in normalized_spec and "loopPolicy" in normalized_spec:
@@ -220,20 +246,12 @@ async def on_job_completion_annotation(
         patch.status["phase"] = Phase.FAILED.value
         patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
         patch.status["stages"] = {"executor": {"status": "failed", "summary": "Job failed"}}
-        patch.meta.annotations[JOB_STATUS_ANNOTATION] = "processed"
+        patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = "processed"
         logger.warning("TaskSpec %s/%s marked as failed", namespace, name)
         return
 
     try:
-        import base64
-
-        from kubernetes_asyncio.client import CoreV1Api
-
-        core_api = CoreV1Api()
-        secret = await core_api.read_namespaced_secret(
-            name=MASTER_SECRET_NAME, namespace=MASTER_SECRET_NAMESPACE
-        )
-        token = base64.b64decode(secret.data[CREDENTIAL_GITHUB_TOKEN]).decode()
+        token = await _read_github_token()
     except Exception as exc:
         logger.error("Failed to read GitHub token: %s", exc)
         patch.status["phase"] = Phase.FAILED.value
@@ -241,7 +259,7 @@ async def on_job_completion_annotation(
         patch.status["stages"] = {
             "executor": {"status": "failed", "summary": f"Failed to read credentials: {exc}"}
         }
-        patch.meta.annotations[JOB_STATUS_ANNOTATION] = "processed"
+        patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = "processed"
         return
 
     try:
@@ -253,7 +271,7 @@ async def on_job_completion_annotation(
         patch.status["stages"] = {
             "executor": {"status": "failed", "summary": f"Failed to read result: {exc}"}
         }
-        patch.meta.annotations[JOB_STATUS_ANNOTATION] = "processed"
+        patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = "processed"
         return
 
     gates_result = None
@@ -276,7 +294,7 @@ async def on_job_completion_annotation(
                     "summary": f"Gate failed after {current_attempt} attempts",
                 },
             }
-            patch.meta.annotations[JOB_STATUS_ANNOTATION] = "processed"
+            patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = "processed"
             logger.warning(
                 "Task %s gate failed after %d attempts, escalating",
                 name,
@@ -289,7 +307,7 @@ async def on_job_completion_annotation(
                 "gating": {"status": "failed", "passed": False, "attempt": current_attempt},
                 "executor": {"status": "running", "attempts": current_attempt + 1},
             }
-            patch.meta.annotations[JOB_STATUS_ANNOTATION] = "processed"
+            patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = "processed"
             logger.info(
                 "Task %s gate failed on attempt %d, will retry (max %d)",
                 name,
@@ -298,6 +316,7 @@ async def on_job_completion_annotation(
             )
         return
 
+    # Gates passed — decide whether to review or finish
     stages_update: dict[str, Any] = {
         "executor": {
             "status": "complete",
@@ -312,15 +331,185 @@ async def on_job_completion_annotation(
             "attempt": gates_result.attempt,
         }
 
-    patch.status["phase"] = Phase.DONE.value
-    patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
-    patch.status["stages"] = stages_update
     patch.status["workspace"] = {"headSHA": result.commit_sha, "branch": task_branch}
-    patch.meta.annotations[JOB_STATUS_ANNOTATION] = "processed"
 
-    logger.info(
-        "Executor completed for task %s/%s: sha=%s",
-        namespace,
-        name,
-        result.commit_sha,
-    )
+    if task_spec.review.enabled:
+        # Spawn the reviewer
+        ns_name = status.get("workspace", {}).get("namespace", f"nubi-{name}")
+
+        try:
+            secret_name = await ensure_stage_secret(ns_name, name, "reviewer")
+        except CredentialError as exc:
+            logger.error("Failed to create reviewer credentials: %s", exc)
+            patch.status["phase"] = Phase.FAILED.value
+            patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+            patch.status["stages"] = stages_update
+            patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = "processed"
+            return
+
+        try:
+            reviewer_job = await create_reviewer_job(
+                name, ns_name, task_spec, secret_name, namespace
+            )
+        except SandboxError as exc:
+            logger.error("Failed to create reviewer job: %s", exc)
+            patch.status["phase"] = Phase.FAILED.value
+            patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+            patch.status["stages"] = stages_update
+            patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = "processed"
+            return
+
+        stages_update["reviewer"] = {"status": "running"}
+        patch.status["phase"] = Phase.REVIEWING.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = stages_update
+        patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = "processed"
+
+        logger.info(
+            "Executor completed for task %s/%s, spawned reviewer job %s",
+            namespace,
+            name,
+            reviewer_job,
+        )
+    else:
+        patch.status["phase"] = Phase.DONE.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = stages_update
+        patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = "processed"
+
+        logger.info(
+            "Executor completed for task %s/%s: sha=%s (review disabled)",
+            namespace,
+            name,
+            result.commit_sha,
+        )
+
+
+@kopf.on.field(  # type: ignore[arg-type]
+    "taskspecs",
+    group="nubi.io",
+    version="v1",
+    field=("metadata", "annotations", REVIEWER_JOB_STATUS_ANNOTATION),
+)
+async def on_reviewer_completion(
+    spec: dict[str, Any],
+    name: str,
+    namespace: str,
+    status: dict[str, Any],
+    patch: Any,
+    old: Any,
+    new: Any,
+    **kwargs: Any,
+) -> None:
+    if not new or new == "processed":
+        return
+
+    logger.info("Processing reviewer completion for TaskSpec %s/%s: %s", namespace, name, new)
+
+    normalized_spec = dict(spec)
+    if "loop_policy" not in normalized_spec and "loopPolicy" in normalized_spec:
+        normalized_spec["loop_policy"] = normalized_spec["loopPolicy"]
+
+    task_spec = TaskSpecSpec.model_validate(normalized_spec)
+    repo = task_spec.inputs.repo
+    task_branch = f"nubi/{name}"
+
+    if new == "failed":
+        patch.status["phase"] = Phase.FAILED.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = {
+            **status.get("stages", {}),
+            "reviewer": {"status": "failed", "feedback": "Reviewer job failed"},
+        }
+        patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+        logger.warning("TaskSpec %s/%s reviewer failed", namespace, name)
+        return
+
+    try:
+        token = await _read_github_token()
+    except Exception as exc:
+        logger.error("Failed to read GitHub token for reviewer result: %s", exc)
+        patch.status["phase"] = Phase.FAILED.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+        return
+
+    try:
+        review = await read_review_result(repo, task_branch, token)
+    except ResultError as exc:
+        logger.error("Failed to read reviewer result: %s", exc)
+        patch.status["phase"] = Phase.FAILED.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = {
+            **status.get("stages", {}),
+            "reviewer": {"status": "failed", "feedback": f"Failed to read result: {exc}"},
+        }
+        patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+        return
+
+    reviewer_stage = {
+        "status": review.decision.value,
+        "feedback": review.feedback,
+        "decision": review.decision.value,
+    }
+
+    if review.decision == "approve":
+        patch.status["phase"] = Phase.DONE.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = {**status.get("stages", {}), "reviewer": reviewer_stage}
+        patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+        logger.info("Task %s/%s approved by reviewer", namespace, name)
+
+    elif review.decision == "request-changes" and task_spec.loop_policy.reviewer_to_executor:
+        # Re-spawn executor with reviewer feedback
+        ns_name = status.get("workspace", {}).get("namespace", f"nubi-{name}")
+
+        try:
+            secret_name = await ensure_stage_secret(ns_name, name, "executor")
+        except CredentialError as exc:
+            logger.error("Failed to create executor credentials for retry: %s", exc)
+            patch.status["phase"] = Phase.ESCALATED.value
+            patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+            patch.status["stages"] = {**status.get("stages", {}), "reviewer": reviewer_stage}
+            patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+            return
+
+        try:
+            executor_job = await create_executor_job(
+                name, ns_name, task_spec, secret_name, namespace
+            )
+        except SandboxError as exc:
+            logger.error("Failed to re-create executor job: %s", exc)
+            patch.status["phase"] = Phase.ESCALATED.value
+            patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+            patch.status["stages"] = {**status.get("stages", {}), "reviewer": reviewer_stage}
+            patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+            return
+
+        patch.status["phase"] = Phase.EXECUTING.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = {
+            **status.get("stages", {}),
+            "reviewer": reviewer_stage,
+            "executor": {"status": "running"},
+        }
+        patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+        logger.info(
+            "Task %s/%s reviewer requested changes, re-spawning executor %s",
+            namespace,
+            name,
+            executor_job,
+        )
+
+    else:
+        # reject, or request-changes without reviewer_to_executor
+        patch.status["phase"] = Phase.ESCALATED.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = {**status.get("stages", {}), "reviewer": reviewer_stage}
+        patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+        logger.warning(
+            "Task %s/%s escalated: reviewer decision=%s",
+            namespace,
+            name,
+            review.decision.value,
+        )

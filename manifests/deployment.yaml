@@ -124,7 +124,7 @@ spec:
             - name: NUBI_LLM_PROVIDER
               value: "openai"
             - name: NUBI_MODEL_ID
-              value: "moonshotai/kimi-k2"
+              value: "minimax/minimax-m2.7"
             - name: NUBI_LLM_BASE_URL
               value: "https://openrouter.ai/api/v1"
             - name: NUBI_AGENT_IMAGE_PULL_POLICY

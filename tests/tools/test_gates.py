@@ -439,14 +439,14 @@ class TestRunSingleGate:
         mock_which.return_value = "/usr/bin/radon"
         mock_subprocess.return_value = MagicMock(
             returncode=0,
-            stdout='[{"name": "foo", "complexity": 5}]',
+            stdout='{"foo.py": [{"name": "foo", "complexity": 5}]}',
             stderr="",
         )
 
         discovery = GateDiscovery(
             name="radon",
             category=GateCategory.COMPLEXITY,
-            command="radon --max-cc 10 -j /workspace",
+            command="radon cc -j /workspace",
         )
         result = _run_single_gate(discovery, "/workspace", GatePolicy(), timeout=300)
 
@@ -462,18 +462,34 @@ class TestRunSingleGate:
         mock_which.return_value = "/usr/bin/radon"
         mock_subprocess.return_value = MagicMock(
             returncode=0,
-            stdout='[{"name": "complex_func", "complexity": 15}]',
+            stdout='{"foo.py": [{"name": "complex_func", "complexity": 15}]}',
             stderr="",
         )
 
         discovery = GateDiscovery(
             name="radon",
             category=GateCategory.COMPLEXITY,
-            command="radon --max-cc 10 -j /workspace",
+            command="radon cc -j /workspace",
         )
         result = _run_single_gate(discovery, "/workspace", GatePolicy(), timeout=300)
 
         assert result.status == GateStatus.FAILED
+
+    @patch("nubi.tools.gates.subprocess.run")
+    def test_diff_size_uses_base_branch(self, mock_subprocess: MagicMock) -> None:
+        from nubi.tools.gates import _run_single_gate
+
+        mock_subprocess.return_value = MagicMock(
+            returncode=0, stdout="1 file changed, 5 insertions(+)", stderr=""
+        )
+
+        discovery = GateDiscovery(name="diff_size", category=GateCategory.DIFF_SIZE)
+        policy = GatePolicy(base_branch="develop")
+        result = _run_single_gate(discovery, "/workspace", policy, timeout=300)
+
+        cmd_args = mock_subprocess.call_args[0][0]
+        assert "origin/develop..HEAD" in " ".join(cmd_args)
+        assert result.command == "git diff --stat origin/develop..HEAD"
 
 
 class TestGateToolRegistry:

@@ -7,6 +7,8 @@ from typing import Any
 
 from strands import Agent
 
+from nubi.agents.logging_handler import LoggingCallbackHandler
+
 EXECUTOR_SYSTEM_PROMPT = """\
 You are Nubi Executor, an autonomous coding agent running inside a sandboxed Kubernetes pod.
 
@@ -88,13 +90,18 @@ def create_model(provider: str, api_key: str) -> Any:
     elif provider == "openai":
         from strands.models.openai import OpenAIModel
 
-        client_args: dict[str, Any] = {"api_key": api_key}
+        client_args: dict[str, Any] = {
+            "api_key": api_key,
+            "timeout": 120.0,
+            "max_retries": 2,
+        }
         base_url = os.environ.get("NUBI_LLM_BASE_URL")
         if base_url:
             client_args["base_url"] = base_url
 
         return OpenAIModel(
             model_id=os.environ.get("NUBI_MODEL_ID", "gpt-4o"),
+            params={"max_tokens": 16384},
             client_args=client_args,
         )
     else:
@@ -137,5 +144,5 @@ def create_executor_agent(
         model=model,
         tools=tools,
         system_prompt=system_prompt,
-        callback_handler=None,
+        callback_handler=LoggingCallbackHandler(),
     )

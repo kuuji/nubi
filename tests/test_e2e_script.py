@@ -258,6 +258,12 @@ def kubectl_main() -> int:
         print("described")
         return 0
 
+    # get job <name> — return not-found for reviewer jobs unless overridden
+    if len(args) >= 3 and args[0] == "get" and args[1] == "job" and "reviewer" in args[2]:
+        reviewer_exists = env("FAKE_E2E_REVIEWER_JOB_EXISTS", "1")
+        if reviewer_exists != "1":
+            return 1
+
     print("ok")
     return 0
 
@@ -400,11 +406,11 @@ def test_test_command_fails_fast_when_job_is_complete_but_phase_is_stuck(tmp_pat
     output = _strip_ansi(completed.stdout + completed.stderr)
 
     assert completed.returncode != 0
-    assert "executor Job completed" in output
+    assert "Reviewer Job completed" in output
     assert "TaskSpec phase remained Executing" in output
     assert "controller status did not persist" in output
     assert "Artifacts: /tmp/" in output
-    assert _count_logged_calls(log_lines, "sleep") < 5
+    assert _count_logged_calls(log_lines, "sleep") < 10
 
 
 def test_test_command_detects_terminal_success_when_complete_is_not_first_condition(

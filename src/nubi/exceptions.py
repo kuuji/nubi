@@ -31,3 +31,7 @@ class SandboxError(NubiError):
 
 class ResultError(NubiError):
     """Raised when reading executor results fails."""
+
+
+class ReviewError(NubiError):
+    """Raised when reviewer operations fail."""

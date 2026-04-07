@@ -3,12 +3,12 @@
 ## Bugs
 - [x] TaskSpec status doesn't persist — PATCH returns 200 but phase stays "Executing" (Fixed: controller annotation patch now uses correct Kubernetes client signature)
 - [x] Live e2e test hangs indefinitely — fixed Job terminal detection to handle non-standard condition ordering (SuccessCriteriaMet, FailureTarget)
-- [ ] Remove unnecessary git `.gitconfig` creation — audit and drop `safe.directory` workaround if sandbox ownership makes it unnecessary
+- [x] Remove unnecessary git `.gitconfig` creation — moved safe.directory to container env vars (GIT_CONFIG_COUNT/KEY/VALUE), removed code-level workarounds
 
 ## Backlog
 - [ ] Validator agent — writes test suites, commits to branch, runs them
-- [ ] Reviewer agent — read-only evaluation, approve/reject with feedback
-- [ ] Loop resolution — retry logic (gate→executor, validator→executor, reviewer→executor) with max_retries
+- [x] Reviewer agent — read-only evaluation, approve/reject with feedback, reviewer→executor retry loop
+- [ ] Loop resolution — remaining retry paths (validator→executor) with max_retries
 - [ ] PR output — create GitHub PR from task branch on approval
 - [ ] Summary call — single LLM call to produce human-readable narrative from CRD status + traces
 - [ ] Planner agent — task decomposition for complex specs (opt-in)

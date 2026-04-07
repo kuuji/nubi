@@ -20,7 +20,6 @@ class TestGitClone:
     def test_clones_with_token(self, mock_run: MagicMock) -> None:
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         git_clone("kuuji/repo", "main", "tok123", "/workspace")
-        # call_args_list[0] = clone (with -c safe.directory=*)
         clone_call = mock_run.call_args_list[0]
         assert "x-access-token:tok123" in str(clone_call)
         assert "kuuji/repo" in str(clone_call)
@@ -36,8 +35,7 @@ class TestGitClone:
     @patch("nubi.tools.git.subprocess.run")
     def test_creates_branch_if_not_exists(self, mock_run: MagicMock) -> None:
         returns = [
-            MagicMock(returncode=0, stdout="", stderr=""),  # clone (with -c safe.directory=*)
-            MagicMock(returncode=0),  # global safe.directory persist
+            MagicMock(returncode=0, stdout="", stderr=""),  # clone
             MagicMock(returncode=0),  # config email
             MagicMock(returncode=0),  # config name
             MagicMock(returncode=1, stdout="", stderr="error"),  # checkout fails
