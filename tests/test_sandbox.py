@@ -192,6 +192,13 @@ class TestBuildExecutorJobContainer:
         assert len(ws) == 1
         assert ws[0].mount_path == "/workspace"
 
+    def test_tmp_volume_mount(self) -> None:
+        c = self._container()
+        mounts = c.volume_mounts
+        tmp = [m for m in mounts if m.name == "tmp"]
+        assert len(tmp) == 1
+        assert tmp[0].mount_path == "/tmp"
+
 
 # -- build_executor_job — security context -----------------------------------
 
@@ -210,8 +217,8 @@ class TestBuildExecutorJobSecurity:
     def test_no_privilege_escalation(self) -> None:
         assert self._sec_ctx().allow_privilege_escalation is False
 
-    def test_read_only_root_fs_disabled(self) -> None:
-        assert self._sec_ctx().read_only_root_filesystem is False
+    def test_read_only_root_fs_enabled(self) -> None:
+        assert self._sec_ctx().read_only_root_filesystem is True
 
     def test_drop_all_capabilities(self) -> None:
         assert self._sec_ctx().capabilities.drop == ["ALL"]
@@ -280,6 +287,26 @@ class TestBuildExecutorJobVolumes:
         ws = [v for v in volumes if v.name == "workspace"]
         assert len(ws) == 1
         assert ws[0].empty_dir is not None
+
+    def test_workspace_size_limit(self) -> None:
+        job = _build()
+        volumes = job.spec.template.spec.volumes
+        ws = [v for v in volumes if v.name == "workspace"][0]
+        assert ws.empty_dir.size_limit == "1Gi"
+
+    def test_tmp_volume(self) -> None:
+        job = _build()
+        volumes = job.spec.template.spec.volumes
+        tmp = [v for v in volumes if v.name == "tmp"]
+        assert len(tmp) == 1
+        assert tmp[0].empty_dir is not None
+        assert tmp[0].empty_dir.size_limit == "256Mi"
+
+
+class TestBuildExecutorJobPodSpec:
+    def test_no_service_account_token(self) -> None:
+        job = _build()
+        assert job.spec.template.spec.automount_service_account_token is False
 
 
 # -- create_executor_job -----------------------------------------------------

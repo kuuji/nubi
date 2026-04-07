@@ -134,13 +134,14 @@ def build_executor_job(
             run_as_non_root=True,
             run_as_user=65534,
             allow_privilege_escalation=False,
-            read_only_root_filesystem=False,
+            read_only_root_filesystem=True,
             capabilities=V1Capabilities(drop=["ALL"]),
             seccomp_profile=V1SeccompProfile(type="RuntimeDefault"),
         ),
         env=env_from_secret + env_plain,
         volume_mounts=[
             V1VolumeMount(name="workspace", mount_path="/workspace"),
+            V1VolumeMount(name="tmp", mount_path="/tmp"),
         ],
     )
 
@@ -165,11 +166,16 @@ def build_executor_job(
                 spec=V1PodSpec(
                     runtime_class_name=rc if rc else None,
                     restart_policy="Never",
+                    automount_service_account_token=False,
                     containers=[container],
                     volumes=[
                         V1Volume(
                             name="workspace",
-                            empty_dir=V1EmptyDirVolumeSource(),
+                            empty_dir=V1EmptyDirVolumeSource(size_limit="1Gi"),
+                        ),
+                        V1Volume(
+                            name="tmp",
+                            empty_dir=V1EmptyDirVolumeSource(size_limit="256Mi"),
                         ),
                     ],
                 ),
@@ -232,9 +238,7 @@ def build_reviewer_job(
     model_id = os.environ.get("NUBI_REVIEWER_MODEL_ID", os.environ.get("NUBI_MODEL_ID"))
     if model_id:
         env_plain.append(V1EnvVar(name="NUBI_MODEL_ID", value=model_id))
-    base_url = os.environ.get(
-        "NUBI_REVIEWER_LLM_BASE_URL", os.environ.get("NUBI_LLM_BASE_URL")
-    )
+    base_url = os.environ.get("NUBI_REVIEWER_LLM_BASE_URL", os.environ.get("NUBI_LLM_BASE_URL"))
     if base_url:
         env_plain.append(V1EnvVar(name="NUBI_LLM_BASE_URL", value=base_url))
 
@@ -261,13 +265,14 @@ def build_reviewer_job(
             run_as_non_root=True,
             run_as_user=65534,
             allow_privilege_escalation=False,
-            read_only_root_filesystem=False,
+            read_only_root_filesystem=True,
             capabilities=V1Capabilities(drop=["ALL"]),
             seccomp_profile=V1SeccompProfile(type="RuntimeDefault"),
         ),
         env=env_from_secret + env_plain,
         volume_mounts=[
             V1VolumeMount(name="workspace", mount_path="/workspace"),
+            V1VolumeMount(name="tmp", mount_path="/tmp"),
         ],
     )
 
@@ -292,11 +297,16 @@ def build_reviewer_job(
                 spec=V1PodSpec(
                     runtime_class_name=rc if rc else None,
                     restart_policy="Never",
+                    automount_service_account_token=False,
                     containers=[container],
                     volumes=[
                         V1Volume(
                             name="workspace",
-                            empty_dir=V1EmptyDirVolumeSource(),
+                            empty_dir=V1EmptyDirVolumeSource(size_limit="1Gi"),
+                        ),
+                        V1Volume(
+                            name="tmp",
+                            empty_dir=V1EmptyDirVolumeSource(size_limit="256Mi"),
                         ),
                     ],
                 ),
@@ -348,8 +358,13 @@ async def create_executor_job(
     Returns the Job name.
     """
     job = build_executor_job(
-        task_name, ns_name, spec, secret_name, taskspec_namespace,
-        attempt=attempt, reviewer_feedback=reviewer_feedback,
+        task_name,
+        ns_name,
+        spec,
+        secret_name,
+        taskspec_namespace,
+        attempt=attempt,
+        reviewer_feedback=reviewer_feedback,
     )
     job_name = job.metadata.name
     batch_api = BatchV1Api()
