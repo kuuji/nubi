@@ -13,7 +13,7 @@
 - [ ] Summary call — single LLM call to produce human-readable narrative from CRD status + traces
 - [ ] Planner agent — task decomposition for complex specs (opt-in)
 - [ ] Notification output — Discord/Telegram notifications on completion
-- [ ] Integration test suite — real K8s API calls (namespace creation, Job spawning, status updates)
+- [ ] Controller integration tests — real K8s (k3d), mock LLM (fake agent entrypoint), mock GitHub API. Test all state machine loops: executor→reviewer→Done, request-changes→retry→approve, gates fail→retry→escalate, reject→escalate, timeouts
 - [ ] Helm chart — templated deployment for production
 - [x] Audit overall project complexity — identify unnecessary moving parts, simplification opportunities, and places where agent workflow can be reduced
 
