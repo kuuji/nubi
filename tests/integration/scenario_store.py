@@ -11,6 +11,7 @@ import re
 from typing import Any
 
 from nubi.agents.gate_result import GatesResult
+from nubi.agents.monitor_result import MonitorResult
 from nubi.agents.result import ExecutorResult
 from nubi.agents.review_result import ReviewResult
 from nubi.exceptions import ResultError
@@ -41,6 +42,7 @@ class ScenarioResultStore:
         self._executor: dict[tuple[str, int], ExecutorResult] = {}
         self._gates: dict[tuple[str, int], GatesResult] = {}
         self._reviews: dict[tuple[str, int], ReviewResult] = {}
+        self._monitors: dict[tuple[str, int], MonitorResult] = {}
         self._call_counts: dict[tuple[str, str], int] = {}
 
     def set_executor_result(self, task_id: str, result: ExecutorResult, attempt: int = 1) -> None:
@@ -51,6 +53,9 @@ class ScenarioResultStore:
 
     def set_review_result(self, task_id: str, result: ReviewResult, attempt: int = 1) -> None:
         self._reviews[(task_id, attempt)] = result
+
+    def set_monitor_result(self, task_id: str, result: MonitorResult, attempt: int = 1) -> None:
+        self._monitors[(task_id, attempt)] = result
 
     def _next_attempt(self, task_id: str, result_type: str) -> int:
         """Increment and return the call count for (task_id, result_type)."""
@@ -87,9 +92,14 @@ class ScenarioResultStore:
         task_id = _task_id_from_branch(branch)
         return self._lookup(self._reviews, task_id, "review")
 
+    async def read_monitor_result(self, repo: str, branch: str, token: str) -> MonitorResult:
+        task_id = _task_id_from_branch(branch)
+        return self._lookup(self._monitors, task_id, "monitor")
+
     def reset(self) -> None:
         """Clear all registered results and call counts."""
         self._executor.clear()
         self._gates.clear()
         self._reviews.clear()
+        self._monitors.clear()
         self._call_counts.clear()

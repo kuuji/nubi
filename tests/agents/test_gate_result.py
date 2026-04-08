@@ -5,14 +5,16 @@ from __future__ import annotations
 import json
 
 from nubi.agents.gate_result import (
-    GATES_FILE_PATH,
     GateCategory,
     GateDiscovery,
     GateResult,
     GatesResult,
     GateStatus,
+    gates_file_path,
     write_gates_result,
 )
+
+TASK_ID = "test-task-1"
 
 
 class TestGateCategory:
@@ -203,15 +205,15 @@ class TestGatesResult:
 
 
 class TestGatesFilePath:
-    def test_gates_file_path_constant(self) -> None:
-        assert GATES_FILE_PATH == ".nubi/gates.json"
+    def test_gates_file_path_function(self) -> None:
+        assert gates_file_path("my-task") == ".nubi/my-task/gates.json"
 
 
 class TestWriteGatesResult:
     def test_writes_json_file(self, tmp_path: str) -> None:
         result = GatesResult(discovered=[], gates=[], overall_passed=True)
-        write_gates_result(result, tmp_path)
-        gates_path = f"{tmp_path}/.nubi/gates.json"
+        write_gates_result(result, tmp_path, TASK_ID)
+        gates_path = f"{tmp_path}/.nubi/{TASK_ID}/gates.json"
         with open(gates_path) as f:
             data = json.load(f)
         assert data["overall_passed"] is True
@@ -220,10 +222,10 @@ class TestWriteGatesResult:
 
     def test_creates_nubi_dir(self, tmp_path: str) -> None:
         result = GatesResult(discovered=[], gates=[], overall_passed=True)
-        write_gates_result(result, tmp_path)
+        write_gates_result(result, tmp_path, TASK_ID)
         import os
 
-        assert os.path.isdir(f"{tmp_path}/.nubi")
+        assert os.path.isdir(f"{tmp_path}/.nubi/{TASK_ID}")
 
     def test_overwrites_existing(self, tmp_path: str) -> None:
         discovery1 = GateDiscovery(name="ruff", category=GateCategory.LINT)
@@ -231,16 +233,16 @@ class TestWriteGatesResult:
         result1 = GatesResult(
             discovered=[discovery1], gates=[gate1], overall_passed=False, attempt=1
         )
-        write_gates_result(result1, tmp_path)
+        write_gates_result(result1, tmp_path, TASK_ID)
 
         discovery2 = GateDiscovery(name="pytest", category=GateCategory.TEST)
         gate2 = GateResult(name="pytest", category=GateCategory.TEST, status=GateStatus.PASSED)
         result2 = GatesResult(
             discovered=[discovery2], gates=[gate2], overall_passed=True, attempt=2
         )
-        write_gates_result(result2, tmp_path)
+        write_gates_result(result2, tmp_path, TASK_ID)
 
-        gates_path = f"{tmp_path}/.nubi/gates.json"
+        gates_path = f"{tmp_path}/.nubi/{TASK_ID}/gates.json"
         with open(gates_path) as f:
             data = json.load(f)
         assert data["overall_passed"] is True
@@ -267,8 +269,8 @@ class TestWriteGatesResult:
             overall_passed=True,
             attempt=1,
         )
-        write_gates_result(result, tmp_path)
-        gates_path = f"{tmp_path}/.nubi/gates.json"
+        write_gates_result(result, tmp_path, TASK_ID)
+        gates_path = f"{tmp_path}/.nubi/{TASK_ID}/gates.json"
         with open(gates_path) as f:
             data = json.load(f)
         assert data["gates"][0]["name"] == "ruff"

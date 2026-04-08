@@ -234,6 +234,7 @@ spec:
                     - Gating
                     - Validating
                     - Reviewing
+                    - Monitoring
                     - Summarizing
                     - Done
                     - Failed
@@ -290,4 +291,26 @@ spec:
                         feedback:
                           type: string
                         decision:
+                          type: string
+                    monitor:
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                        decision:
+                          type: string
+                        summary:
+                          type: string
+                        concerns:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              severity:
+                                type: string
+                              area:
+                                type: string
+                              description:
+                                type: string
+                        prURL:
                           type: string

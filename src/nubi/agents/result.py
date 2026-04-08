@@ -7,7 +7,12 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-RESULT_FILE_PATH = ".nubi/result.json"
+RESULT_FILE_NAME = "result.json"
+
+
+def result_file_path(task_id: str) -> str:
+    """Return the path for the executor result file."""
+    return f".nubi/{task_id}/{RESULT_FILE_NAME}"
 
 
 class ExecutorResult(BaseModel):
@@ -20,9 +25,9 @@ class ExecutorResult(BaseModel):
     error: str = ""
 
 
-def write_result(result: ExecutorResult, workspace: str) -> None:
-    """Write executor result JSON to {workspace}/.nubi/result.json."""
-    result_path = os.path.join(workspace, RESULT_FILE_PATH)
-    os.makedirs(os.path.dirname(result_path), exist_ok=True)
-    with open(result_path, "w") as f:
+def write_result(result: ExecutorResult, workspace: str, task_id: str) -> None:
+    """Write executor result JSON to {workspace}/.nubi/{task_id}/result.json."""
+    path = os.path.join(workspace, result_file_path(task_id))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
         f.write(result.model_dump_json(indent=2))

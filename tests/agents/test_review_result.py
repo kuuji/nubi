@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 
 from nubi.agents.review_result import (
-    REVIEW_FILE_PATH,
     ReviewDecision,
     ReviewIssue,
     ReviewResult,
+    review_file_path,
     write_review_result,
 )
+
+TASK_ID = "test-task-1"
 
 
 class TestReviewDecision:
@@ -109,15 +111,15 @@ class TestReviewResult:
 
 
 class TestReviewFilePath:
-    def test_review_file_path_constant(self) -> None:
-        assert REVIEW_FILE_PATH == ".nubi/review.json"
+    def test_review_file_path_function(self) -> None:
+        assert review_file_path("my-task") == ".nubi/my-task/review.json"
 
 
 class TestWriteReviewResult:
     def test_writes_json_file(self, tmp_path: str) -> None:
         result = ReviewResult(decision=ReviewDecision.APPROVE, summary="LGTM")
-        write_review_result(result, tmp_path)
-        review_path = f"{tmp_path}/.nubi/review.json"
+        write_review_result(result, tmp_path, TASK_ID)
+        review_path = f"{tmp_path}/.nubi/{TASK_ID}/review.json"
         with open(review_path) as f:
             data = json.load(f)
         assert data["decision"] == "approve"
@@ -125,19 +127,19 @@ class TestWriteReviewResult:
 
     def test_creates_nubi_dir(self, tmp_path: str) -> None:
         result = ReviewResult(decision=ReviewDecision.APPROVE)
-        write_review_result(result, tmp_path)
+        write_review_result(result, tmp_path, TASK_ID)
         import os
 
-        assert os.path.isdir(f"{tmp_path}/.nubi")
+        assert os.path.isdir(f"{tmp_path}/.nubi/{TASK_ID}")
 
     def test_overwrites_existing(self, tmp_path: str) -> None:
         result1 = ReviewResult(decision=ReviewDecision.REQUEST_CHANGES, feedback="Fix tests")
-        write_review_result(result1, tmp_path)
+        write_review_result(result1, tmp_path, TASK_ID)
 
         result2 = ReviewResult(decision=ReviewDecision.APPROVE, feedback="All good")
-        write_review_result(result2, tmp_path)
+        write_review_result(result2, tmp_path, TASK_ID)
 
-        review_path = f"{tmp_path}/.nubi/review.json"
+        review_path = f"{tmp_path}/.nubi/{TASK_ID}/review.json"
         with open(review_path) as f:
             data = json.load(f)
         assert data["decision"] == "approve"
@@ -156,8 +158,8 @@ class TestWriteReviewResult:
                 ),
             ],
         )
-        write_review_result(result, tmp_path)
-        review_path = f"{tmp_path}/.nubi/review.json"
+        write_review_result(result, tmp_path, TASK_ID)
+        review_path = f"{tmp_path}/.nubi/{TASK_ID}/review.json"
         with open(review_path) as f:
             data = json.load(f)
         assert data["issues"][0]["severity"] == "critical"

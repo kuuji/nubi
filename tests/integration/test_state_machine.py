@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 
 from nubi.agents.gate_result import GateCategory, GateResult, GatesResult, GateStatus
+from nubi.agents.monitor_result import MonitorConcern, MonitorDecision, MonitorResult
 from nubi.agents.result import ExecutorResult
 from nubi.agents.review_result import ReviewDecision, ReviewResult
 from tests.integration.helpers import await_phase, create_taskspec, get_taskspec_status
@@ -65,10 +66,32 @@ def _reject_review() -> ReviewResult:
     )
 
 
-class TestHappyPath:
-    """Scenario 1: executor ok, gates pass, reviewer approve → Done."""
+def _approve_monitor(pr_url: str = "") -> MonitorResult:
+    return MonitorResult(
+        decision=MonitorDecision.APPROVE,
+        summary="Pipeline audit passed",
+        pr_url=pr_url,
+    )
 
-    async def test_executor_gates_reviewer_approve(
+
+def _flag_monitor() -> MonitorResult:
+    return MonitorResult(
+        decision=MonitorDecision.FLAG,
+        summary="Security concern found",
+        concerns=[
+            MonitorConcern(
+                severity="major",
+                area="security",
+                description="Hardcoded API key detected",
+            )
+        ],
+    )
+
+
+class TestHappyPath:
+    """Scenario 1: executor ok, gates pass, reviewer approve, monitor approve → Done."""
+
+    async def test_executor_gates_reviewer_monitor_approve(
         self,
         task_name: str,
         scenario_store: ScenarioResultStore,
@@ -76,18 +99,22 @@ class TestHappyPath:
         scenario_store.set_executor_result(task_name, _ok_executor())
         scenario_store.set_gates_result(task_name, _ok_gates())
         scenario_store.set_review_result(task_name, _approve_review())
+        scenario_store.set_monitor_result(
+            task_name, _approve_monitor("https://github.com/test/repo/pull/1")
+        )
 
         await create_taskspec(task_name, review_enabled=True)
-        phase = await await_phase(task_name, "Done", timeout=45)
+        phase = await await_phase(task_name, "Done", timeout=60)
 
         assert phase == "Done"
         status = await get_taskspec_status(task_name)
         assert status["stages"]["executor"]["status"] == "complete"
         assert status["stages"]["reviewer"]["decision"] == "approve"
+        assert status["stages"]["monitor"]["decision"] == "approve"
 
 
 class TestReviewerRequestChangesLoop:
-    """Scenario 2: reviewer request-changes → executor retry → approve → Done."""
+    """Scenario 2: reviewer request-changes → executor retry → approve → monitor → Done."""
 
     async def test_request_changes_then_approve(
         self,
@@ -106,12 +133,16 @@ class TestReviewerRequestChangesLoop:
         scenario_store.set_gates_result(task_name, _ok_gates(attempt=1), attempt=2)
         scenario_store.set_review_result(task_name, _approve_review(), attempt=2)
 
+        # Monitor approves after reviewer approves
+        scenario_store.set_monitor_result(task_name, _approve_monitor())
+
         await create_taskspec(task_name, review_enabled=True)
-        phase = await await_phase(task_name, "Done", timeout=60)
+        phase = await await_phase(task_name, "Done", timeout=90)
 
         assert phase == "Done"
         status = await get_taskspec_status(task_name)
         assert status["stages"]["reviewer"]["decision"] == "approve"
+        assert status["stages"]["monitor"]["decision"] == "approve"
 
 
 class TestGateMaxRetriesEscalated:
@@ -202,4 +233,51 @@ class TestReviewDisabled:
         assert (
             "reviewer" not in status.get("stages", {})
             or status["stages"].get("reviewer", {}).get("status", "pending") == "pending"
+        )
+
+
+class TestMonitorFlagConcerns:
+    """Scenario 8: monitor flags concerns → Done (not Failed)."""
+
+    async def test_monitor_flag_still_done(
+        self,
+        task_name: str,
+        scenario_store: ScenarioResultStore,
+    ) -> None:
+        scenario_store.set_executor_result(task_name, _ok_executor())
+        scenario_store.set_gates_result(task_name, _ok_gates())
+        scenario_store.set_review_result(task_name, _approve_review())
+        scenario_store.set_monitor_result(task_name, _flag_monitor())
+
+        await create_taskspec(task_name, review_enabled=True)
+        phase = await await_phase(task_name, "Done", timeout=60)
+
+        assert phase == "Done"
+        status = await get_taskspec_status(task_name)
+        assert status["stages"]["monitor"]["decision"] == "flag"
+        assert len(status["stages"]["monitor"]["concerns"]) > 0
+
+
+class TestMonitorDisabled:
+    """Scenario 9: monitoring disabled, reviewer approve → Done directly."""
+
+    async def test_monitor_disabled_skips_monitor(
+        self,
+        task_name: str,
+        scenario_store: ScenarioResultStore,
+    ) -> None:
+        scenario_store.set_executor_result(task_name, _ok_executor())
+        scenario_store.set_gates_result(task_name, _ok_gates())
+        scenario_store.set_review_result(task_name, _approve_review())
+
+        await create_taskspec(task_name, review_enabled=True, monitoring_summary=False)
+        phase = await await_phase(task_name, "Done", timeout=45)
+
+        assert phase == "Done"
+        status = await get_taskspec_status(task_name)
+        assert status["stages"]["reviewer"]["decision"] == "approve"
+        # No monitor stage
+        assert (
+            "monitor" not in status.get("stages", {})
+            or status["stages"].get("monitor", {}).get("status", "pending") == "pending"
         )

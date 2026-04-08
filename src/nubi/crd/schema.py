@@ -47,6 +47,7 @@ class Phase(StrEnum):
     GATING = "Gating"
     VALIDATING = "Validating"
     REVIEWING = "Reviewing"
+    MONITORING = "Monitoring"
     SUMMARIZING = "Summarizing"
     DONE = "Done"
     FAILED = "Failed"
@@ -234,6 +235,16 @@ class GatingStageStatus(BaseModel):
     attempt: int = Field(default=0)
 
 
+class MonitorStageStatus(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    status: str = Field(default="pending")
+    decision: str = Field(default="")
+    summary: str = Field(default="")
+    concerns: list[dict[str, str]] = Field(default_factory=list)
+    pr_url: str = Field(default="", alias="prURL")
+
+
 class StageStatuses(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -241,6 +252,7 @@ class StageStatuses(BaseModel):
     validator: ValidatorStageStatus = Field(default_factory=ValidatorStageStatus)
     reviewer: ReviewerStageStatus = Field(default_factory=ReviewerStageStatus)
     gating: GatingStageStatus = Field(default_factory=GatingStageStatus)
+    monitor: MonitorStageStatus = Field(default_factory=MonitorStageStatus)
 
 
 class TaskSpecStatus(BaseModel):

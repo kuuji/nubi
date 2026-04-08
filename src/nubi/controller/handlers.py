@@ -10,8 +10,13 @@ import kopf
 
 from nubi.controller.credentials import ensure_stage_secret
 from nubi.controller.namespace import ensure_task_namespace
-from nubi.controller.results import read_executor_result, read_gates_result, read_review_result
-from nubi.controller.sandbox import create_executor_job, create_reviewer_job
+from nubi.controller.results import (
+    read_executor_result,
+    read_gates_result,
+    read_monitor_result,
+    read_review_result,
+)
+from nubi.controller.sandbox import create_executor_job, create_monitor_job, create_reviewer_job
 from nubi.crd.defaults import (
     CREDENTIAL_GITHUB_TOKEN,
     LABEL_TASKSPEC_NAMESPACE,
@@ -25,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 EXECUTOR_JOB_STATUS_ANNOTATION = "nubi.io/executor-job-completed"
 REVIEWER_JOB_STATUS_ANNOTATION = "nubi.io/reviewer-job-completed"
+MONITOR_JOB_STATUS_ANNOTATION = "nubi.io/monitor-job-completed"
 JOB_NAME_ANNOTATION = "nubi.io/job-name"
 JOB_NAMESPACE_ANNOTATION = "nubi.io/job-namespace"
 
@@ -34,6 +40,7 @@ JOB_STATUS_ANNOTATION = EXECUTOR_JOB_STATUS_ANNOTATION
 _STAGE_ANNOTATIONS = {
     "executor": EXECUTOR_JOB_STATUS_ANNOTATION,
     "reviewer": REVIEWER_JOB_STATUS_ANNOTATION,
+    "monitor": MONITOR_JOB_STATUS_ANNOTATION,
 }
 
 
@@ -459,11 +466,68 @@ async def on_reviewer_completion(
     }
 
     if review.decision == "approve":
-        patch.status["phase"] = Phase.DONE.value
-        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
-        patch.status["stages"] = {**status.get("stages", {}), "reviewer": reviewer_stage}
-        patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
-        logger.info("Task %s/%s approved by reviewer", namespace, name)
+        if task_spec.monitoring.summary:
+            # Spawn monitor agent for final audit
+            ns_name = status.get("workspace", {}).get("namespace", f"nubi-{name}")
+
+            pod_logs_b64 = await _collect_pod_logs(ns_name, name)
+
+            try:
+                secret_name = await ensure_stage_secret(ns_name, name, "monitor")
+            except CredentialError as exc:
+                logger.error("Failed to create monitor credentials: %s", exc)
+                # Graceful degradation — go to Done without monitor
+                patch.status["phase"] = Phase.DONE.value
+                patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+                patch.status["stages"] = {**status.get("stages", {}), "reviewer": reviewer_stage}
+                patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+                logger.info(
+                    "Task %s/%s approved (monitor skipped: credential error)",
+                    namespace,
+                    name,
+                )
+                return
+
+            try:
+                monitor_job = await create_monitor_job(
+                    name,
+                    ns_name,
+                    task_spec,
+                    secret_name,
+                    namespace,
+                    pod_logs_b64=pod_logs_b64,
+                )
+            except SandboxError as exc:
+                logger.error("Failed to create monitor job: %s", exc)
+                # Graceful degradation — go to Done without monitor
+                patch.status["phase"] = Phase.DONE.value
+                patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+                patch.status["stages"] = {**status.get("stages", {}), "reviewer": reviewer_stage}
+                patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+                logger.info("Task %s/%s approved (monitor skipped: job error)", namespace, name)
+                return
+
+            patch.status["phase"] = Phase.MONITORING.value
+            patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+            patch.status["stages"] = {
+                **status.get("stages", {}),
+                "reviewer": reviewer_stage,
+                "monitor": {"status": "running"},
+            }
+            patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+            patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = ""
+            logger.info(
+                "Task %s/%s approved by reviewer, spawned monitor job %s",
+                namespace,
+                name,
+                monitor_job,
+            )
+        else:
+            patch.status["phase"] = Phase.DONE.value
+            patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+            patch.status["stages"] = {**status.get("stages", {}), "reviewer": reviewer_stage}
+            patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = "processed"
+            logger.info("Task %s/%s approved by reviewer (monitor disabled)", namespace, name)
 
     elif review.decision == "request-changes" and task_spec.loop_policy.reviewer_to_executor:
         # Re-spawn executor with reviewer feedback
@@ -485,8 +549,13 @@ async def on_reviewer_completion(
 
         try:
             executor_job = await create_executor_job(
-                name, ns_name, task_spec, secret_name, namespace,
-                attempt=attempt, reviewer_feedback=review.feedback,
+                name,
+                ns_name,
+                task_spec,
+                secret_name,
+                namespace,
+                attempt=attempt,
+                reviewer_feedback=review.feedback,
             )
         except SandboxError as exc:
             logger.error("Failed to re-create executor job: %s", exc)
@@ -524,4 +593,157 @@ async def on_reviewer_completion(
             namespace,
             name,
             review.decision.value,
+        )
+
+
+async def _collect_pod_logs(ns_name: str, task_name: str) -> str:
+    """Collect pod logs from executor and reviewer pods in the task namespace.
+
+    Returns base64-encoded concatenated logs, truncated to ~32KB.
+    Returns empty string on any error (best-effort).
+    """
+    import base64
+
+    from kubernetes_asyncio.client import CoreV1Api
+
+    core_api = CoreV1Api()
+    logs_parts: list[str] = []
+    max_bytes = 32 * 1024
+
+    for stage in ("executor", "reviewer"):
+        try:
+            pods = await core_api.list_namespaced_pod(
+                namespace=ns_name,
+                label_selector=f"nubi.io/task-id={task_name},nubi.io/stage={stage}",
+            )
+            for pod in pods.items:
+                try:
+                    log = await core_api.read_namespaced_pod_log(
+                        name=pod.metadata.name,
+                        namespace=ns_name,
+                        container=stage,
+                        tail_lines=500,
+                    )
+                    logs_parts.append(f"=== {stage} pod: {pod.metadata.name} ===\n{log}\n")
+                except Exception as exc:
+                    logger.debug("Failed to read logs for pod %s: %s", pod.metadata.name, exc)
+        except Exception as exc:
+            logger.debug("Failed to list %s pods in %s: %s", stage, ns_name, exc)
+
+    if not logs_parts:
+        return ""
+
+    combined = "\n".join(logs_parts)
+    if len(combined) > max_bytes:
+        combined = combined[:max_bytes] + "\n... (truncated)"
+
+    return base64.b64encode(combined.encode()).decode()
+
+
+@kopf.on.field(  # type: ignore[arg-type]
+    "taskspecs",
+    group="nubi.io",
+    version="v1",
+    field=("metadata", "annotations", MONITOR_JOB_STATUS_ANNOTATION),
+)
+async def on_monitor_completion(
+    spec: dict[str, Any],
+    name: str,
+    namespace: str,
+    status: dict[str, Any],
+    patch: Any,
+    old: Any,
+    new: Any,
+    **kwargs: Any,
+) -> None:
+    if not new or new == "processed":
+        return
+
+    logger.info("Processing monitor completion for TaskSpec %s/%s: %s", namespace, name, new)
+
+    normalized_spec = dict(spec)
+    if "loop_policy" not in normalized_spec and "loopPolicy" in normalized_spec:
+        normalized_spec["loop_policy"] = normalized_spec["loopPolicy"]
+
+    task_spec = TaskSpecSpec.model_validate(normalized_spec)
+    repo = task_spec.inputs.repo
+    task_branch = f"nubi/{name}"
+
+    # Monitor failure is always graceful — task goes to Done
+    if new == "failed":
+        logger.warning(
+            "TaskSpec %s/%s monitor job failed — graceful degradation, marking Done",
+            namespace,
+            name,
+        )
+        patch.status["phase"] = Phase.DONE.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = {
+            **status.get("stages", {}),
+            "monitor": {"status": "failed", "summary": "Monitor job failed (graceful)"},
+        }
+        patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = "processed"
+        return
+
+    try:
+        token = await _read_github_token()
+    except Exception as exc:
+        logger.error("Failed to read GitHub token for monitor result: %s", exc)
+        # Graceful degradation
+        patch.status["phase"] = Phase.DONE.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = {
+            **status.get("stages", {}),
+            "monitor": {"status": "failed", "summary": f"Failed to read credentials: {exc}"},
+        }
+        patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = "processed"
+        return
+
+    try:
+        monitor = await read_monitor_result(repo, task_branch, token)
+    except ResultError as exc:
+        logger.warning("Failed to read monitor result: %s — graceful degradation", exc)
+        patch.status["phase"] = Phase.DONE.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = {
+            **status.get("stages", {}),
+            "monitor": {"status": "failed", "summary": f"Failed to read result: {exc}"},
+        }
+        patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = "processed"
+        return
+
+    monitor_stage: dict[str, Any] = {
+        "status": monitor.decision.value,
+        "decision": monitor.decision.value,
+        "summary": monitor.summary,
+    }
+
+    if monitor.concerns:
+        monitor_stage["concerns"] = [
+            {"severity": c.severity, "area": c.area, "description": c.description}
+            for c in monitor.concerns
+        ]
+
+    if monitor.pr_url:
+        monitor_stage["prURL"] = monitor.pr_url
+
+    # Both approve and flag go to Done (graceful)
+    patch.status["phase"] = Phase.DONE.value
+    patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+    patch.status["stages"] = {**status.get("stages", {}), "monitor": monitor_stage}
+    patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = "processed"
+
+    if monitor.decision == "approve":
+        logger.info(
+            "Task %s/%s monitor approved, PR: %s",
+            namespace,
+            name,
+            monitor.pr_url or "(none)",
+        )
+    else:
+        logger.info(
+            "Task %s/%s monitor flagged concerns: %s",
+            namespace,
+            name,
+            monitor.summary[:200],
         )

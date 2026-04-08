@@ -26,6 +26,7 @@ async def create_taskspec(
     review_focus: list[str] | None = None,
     max_retries: int = 2,
     timeout: str = "60s",
+    monitoring_summary: bool = True,
     **overrides: Any,
 ) -> str:
     """Create a TaskSpec CR and return its name.
@@ -49,6 +50,9 @@ async def create_taskspec(
         "loop_policy": {
             "max_retries": max_retries,
             "reviewer_to_executor": True,
+        },
+        "monitoring": {
+            "summary": monitoring_summary,
         },
     }
     spec.update(overrides)

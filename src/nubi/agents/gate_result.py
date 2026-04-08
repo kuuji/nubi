@@ -7,7 +7,12 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-GATES_FILE_PATH = ".nubi/gates.json"
+GATES_FILE_NAME = "gates.json"
+
+
+def gates_file_path(task_id: str) -> str:
+    """Return the path for the gates result file."""
+    return f".nubi/{task_id}/{GATES_FILE_NAME}"
 
 
 class GateCategory(StrEnum):
@@ -62,9 +67,9 @@ class GatePolicy(BaseModel):
     base_branch: str = "main"
 
 
-def write_gates_result(result: GatesResult, workspace: str) -> None:
-    """Write gates result JSON to {workspace}/.nubi/gates.json."""
-    result_path = os.path.join(workspace, GATES_FILE_PATH)
-    os.makedirs(os.path.dirname(result_path), exist_ok=True)
-    with open(result_path, "w") as f:
+def write_gates_result(result: GatesResult, workspace: str, task_id: str) -> None:
+    """Write gates result JSON to {workspace}/.nubi/{task_id}/gates.json."""
+    path = os.path.join(workspace, gates_file_path(task_id))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
         f.write(result.model_dump_json(indent=2))

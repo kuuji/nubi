@@ -100,9 +100,9 @@ def main() -> int:
 
         logger.info("Review decision: %s", review.decision.value)
 
-        write_review_result(review, workspace)
+        write_review_result(review, workspace, task_id)
 
-        subprocess.run(["git", "add", ".nubi/review.json"], cwd=workspace, check=True)
+        subprocess.run(["git", "add", f".nubi/{task_id}/"], cwd=workspace, check=True)
         subprocess.run(
             ["git", "commit", "-m", "nubi: add reviewer result"],
             cwd=workspace,

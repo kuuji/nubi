@@ -8,7 +8,12 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-REVIEW_FILE_PATH = ".nubi/review.json"
+REVIEW_FILE_NAME = "review.json"
+
+
+def review_file_path(task_id: str) -> str:
+    """Return the path for the review result file."""
+    return f".nubi/{task_id}/{REVIEW_FILE_NAME}"
 
 
 class ReviewDecision(StrEnum):
@@ -31,9 +36,9 @@ class ReviewResult(BaseModel):
     issues: list[ReviewIssue] = Field(default_factory=list)
 
 
-def write_review_result(result: ReviewResult, workspace: str) -> None:
-    """Write review result JSON to {workspace}/.nubi/review.json."""
-    result_path = os.path.join(workspace, REVIEW_FILE_PATH)
-    os.makedirs(os.path.dirname(result_path), exist_ok=True)
-    with open(result_path, "w") as f:
+def write_review_result(result: ReviewResult, workspace: str, task_id: str) -> None:
+    """Write review result JSON to {workspace}/.nubi/{task_id}/review.json."""
+    path = os.path.join(workspace, review_file_path(task_id))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
         f.write(result.model_dump_json(indent=2))

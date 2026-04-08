@@ -10,6 +10,8 @@ from nubi.tools.files import file_list, file_read, file_write
 from nubi.tools.gates import discover_gates, run_gates
 from nubi.tools.git import configure as configure_git
 from nubi.tools.git import git_commit, git_diff, git_log, git_push, git_status
+from nubi.tools.github_api import create_pull_request, read_branch_file, read_diff, submit_audit
+from nubi.tools.github_api import list_branch_files as github_list_branch_files
 from nubi.tools.review import submit_review
 from nubi.tools.shell import configure as configure_shell
 from nubi.tools.shell import run_shell
@@ -23,6 +25,13 @@ TOOL_GROUPS: dict[str, list[Callable[..., Any]]] = {
     "file_list": [file_list],
     "gate": [discover_gates, run_gates],
     "review": [submit_review],
+    "monitor": [
+        read_branch_file,
+        read_diff,
+        github_list_branch_files,
+        create_pull_request,
+        submit_audit,
+    ],
 }
 
 

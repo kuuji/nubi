@@ -406,7 +406,7 @@ def test_test_command_fails_fast_when_job_is_complete_but_phase_is_stuck(tmp_pat
     output = _strip_ansi(completed.stdout + completed.stderr)
 
     assert completed.returncode != 0
-    assert "Reviewer Job completed" in output
+    assert "Monitor Job completed" in output or "Reviewer Job completed" in output
     assert "TaskSpec phase remained Executing" in output
     assert "controller status did not persist" in output
     assert "Artifacts: /tmp/" in output

@@ -46,6 +46,7 @@ def _run_gates_loop(
     base_branch: str,
     gate_policy: GatePolicy,
     max_attempts: int,
+    task_id: str = "",
 ) -> GatesResult | None:
     """Run executor + gates in a loop until gates pass or max_attempts reached.
 
@@ -106,7 +107,7 @@ def _run_gates_loop(
                 overall_passed=False,
                 attempt=attempt,
             )
-            write_gates_result(gates_result, workspace)
+            write_gates_result(gates_result, workspace, task_id)
             if attempt < max_attempts:
                 gate_feedback = (
                     "No code changes were produced. You must modify files to complete the task."
@@ -130,7 +131,7 @@ def _run_gates_loop(
                 gate.output[:200] if gate.output else "",
             )
 
-        write_gates_result(gates_result, workspace)
+        write_gates_result(gates_result, workspace, task_id)
 
         if gates_result.overall_passed:
             logger.info("All gates passed on attempt %d", attempt)
@@ -228,6 +229,7 @@ def main() -> int:
             branch,
             gate_policy,
             max_attempts,
+            task_id=task_id,
         )
 
         head_sha = _get_head_sha(workspace)
@@ -248,9 +250,9 @@ def main() -> int:
                 files_changed=files_changed,
             )
 
-        write_result(result, workspace)
+        write_result(result, workspace, task_id)
 
-        subprocess.run(["git", "add", ".nubi/"], cwd=workspace, check=True)
+        subprocess.run(["git", "add", f".nubi/{task_id}/"], cwd=workspace, check=True)
         subprocess.run(
             ["git", "commit", "-m", "nubi: add executor result and gates"],
             cwd=workspace,
@@ -287,8 +289,8 @@ def main() -> int:
                 status="failure",
                 error=str(sys.exc_info()[1]),
             )
-            write_result(result, workspace)
-            subprocess.run(["git", "add", ".nubi/result.json"], cwd=workspace)
+            write_result(result, workspace, task_id)
+            subprocess.run(["git", "add", f".nubi/{task_id}/"], cwd=workspace)
             subprocess.run(
                 ["git", "commit", "-m", "nubi: add executor failure result"],
                 cwd=workspace,

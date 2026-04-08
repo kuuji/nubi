@@ -183,6 +183,7 @@ class TestPhaseEnum:
         "Gating",
         "Validating",
         "Reviewing",
+        "Monitoring",
         "Summarizing",
         "Done",
         "Failed",
@@ -194,7 +195,7 @@ class TestPhaseEnum:
             assert Phase(value) == value
 
     def test_phase_count(self):
-        assert len(Phase) == 10
+        assert len(Phase) == 11
 
 
 # -- 6. Spec models are frozen -----------------------------------------------

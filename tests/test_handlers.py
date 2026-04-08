@@ -11,15 +11,18 @@ from kubernetes_asyncio.client import CustomObjectsApi
 from pydantic import ValidationError
 
 from nubi.agents.gate_result import GateCategory, GateResult, GatesResult, GateStatus
+from nubi.agents.monitor_result import MonitorConcern, MonitorDecision, MonitorResult
 from nubi.agents.result import ExecutorResult
 from nubi.agents.review_result import ReviewDecision, ReviewResult
 from nubi.controller.handlers import (
     EXECUTOR_JOB_STATUS_ANNOTATION,
     JOB_STATUS_ANNOTATION,
+    MONITOR_JOB_STATUS_ANNOTATION,
     REVIEWER_JOB_STATUS_ANNOTATION,
     _annotate_task_completion,
     on_executor_completion,
     on_job_status_change,
+    on_monitor_completion,
     on_reviewer_completion,
     on_taskspec_created,
 )
@@ -35,6 +38,12 @@ VALID_SPEC: dict = {
 VALID_SPEC_REVIEW_ENABLED: dict = {
     **VALID_SPEC,
     "review": {"enabled": True},
+}
+
+VALID_SPEC_REVIEW_ENABLED_NO_MONITOR: dict = {
+    **VALID_SPEC,
+    "review": {"enabled": True},
+    "monitoring": {"summary": False},
 }
 
 VALID_SPEC_REVIEW_DISABLED: dict = {
@@ -485,7 +494,7 @@ class TestOnExecutorCompletion:
 class TestOnReviewerCompletion:
     @patch("nubi.controller.handlers.read_review_result", new_callable=AsyncMock)
     @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
-    async def test_approve_sets_done(
+    async def test_approve_sets_done_when_monitor_disabled(
         self,
         mock_token: AsyncMock,
         mock_review: AsyncMock,
@@ -498,7 +507,7 @@ class TestOnReviewerCompletion:
 
         fp = FakePatch()
         await on_reviewer_completion(
-            spec=VALID_SPEC_REVIEW_ENABLED,
+            spec=VALID_SPEC_REVIEW_ENABLED_NO_MONITOR,
             name="task-1",
             namespace="ns",
             status={"stages": {"executor": {"status": "complete"}}},
@@ -509,6 +518,51 @@ class TestOnReviewerCompletion:
         assert fp.status.get("phase") == "Done"
         assert fp.status["stages"]["reviewer"]["decision"] == "approve"
         assert fp.meta.annotations.get(REVIEWER_JOB_STATUS_ANNOTATION) == "processed"
+
+    @patch(
+        "nubi.controller.handlers.create_monitor_job",
+        new_callable=AsyncMock,
+        return_value="nubi-monitor-task-1",
+    )
+    @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-monitor-credentials")
+    @patch(
+        "nubi.controller.handlers._collect_pod_logs",
+        new_callable=AsyncMock,
+        return_value="",
+    )
+    @patch("nubi.controller.handlers.read_review_result", new_callable=AsyncMock)
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_approve_spawns_monitor_when_enabled(
+        self,
+        mock_token: AsyncMock,
+        mock_review: AsyncMock,
+        mock_logs: AsyncMock,
+        mock_cred: AsyncMock,
+        mock_monitor_job: AsyncMock,
+    ) -> None:
+        mock_review.return_value = ReviewResult(
+            decision=ReviewDecision.APPROVE,
+            feedback="LGTM",
+            summary="All good",
+        )
+
+        fp = FakePatch()
+        await on_reviewer_completion(
+            spec=VALID_SPEC_REVIEW_ENABLED,
+            name="task-1",
+            namespace="ns",
+            status={
+                "workspace": {"namespace": "nubi-task-1"},
+                "stages": {"executor": {"status": "complete"}},
+            },
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
+        assert fp.status.get("phase") == "Monitoring"
+        assert fp.status["stages"]["reviewer"]["decision"] == "approve"
+        assert fp.status["stages"]["monitor"]["status"] == "running"
+        mock_monitor_job.assert_called_once()
 
     @patch(EXEC_JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-task-1")
     @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
@@ -620,6 +674,97 @@ class TestOnReviewerCompletion:
             new="succeeded",
         )
         assert fp.status.get("phase") == "Escalated"
+
+
+# -- on_monitor_completion — field handler ------------------------------------
+
+
+class TestOnMonitorCompletion:
+    @patch("nubi.controller.handlers.read_monitor_result", new_callable=AsyncMock)
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_approve_sets_done(
+        self,
+        mock_token: AsyncMock,
+        mock_monitor: AsyncMock,
+    ) -> None:
+        mock_monitor.return_value = MonitorResult(
+            decision=MonitorDecision.APPROVE,
+            summary="All good",
+            pr_url="https://github.com/kuuji/test/pull/1",
+        )
+
+        fp = FakePatch()
+        await on_monitor_completion(
+            spec=VALID_SPEC_REVIEW_ENABLED,
+            name="task-1",
+            namespace="ns",
+            status={"stages": {"reviewer": {"decision": "approve"}}},
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
+        assert fp.status.get("phase") == "Done"
+        assert fp.status["stages"]["monitor"]["decision"] == "approve"
+        assert fp.status["stages"]["monitor"]["prURL"] == "https://github.com/kuuji/test/pull/1"
+        assert fp.meta.annotations.get(MONITOR_JOB_STATUS_ANNOTATION) == "processed"
+
+    @patch("nubi.controller.handlers.read_monitor_result", new_callable=AsyncMock)
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_flag_sets_done_not_failed(
+        self,
+        mock_token: AsyncMock,
+        mock_monitor: AsyncMock,
+    ) -> None:
+        mock_monitor.return_value = MonitorResult(
+            decision=MonitorDecision.FLAG,
+            summary="Security concern",
+            concerns=[
+                MonitorConcern(severity="major", area="security", description="Hardcoded key"),
+            ],
+        )
+
+        fp = FakePatch()
+        await on_monitor_completion(
+            spec=VALID_SPEC_REVIEW_ENABLED,
+            name="task-1",
+            namespace="ns",
+            status={"stages": {"reviewer": {"decision": "approve"}}},
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
+        assert fp.status.get("phase") == "Done"
+        assert fp.status["stages"]["monitor"]["decision"] == "flag"
+        assert len(fp.status["stages"]["monitor"]["concerns"]) == 1
+        assert fp.meta.annotations.get(MONITOR_JOB_STATUS_ANNOTATION) == "processed"
+
+    async def test_failed_job_graceful_degradation(self) -> None:
+        fp = FakePatch()
+        await on_monitor_completion(
+            spec=VALID_SPEC_REVIEW_ENABLED,
+            name="task-1",
+            namespace="ns",
+            status={"stages": {"reviewer": {"decision": "approve"}}},
+            patch=fp,
+            old=None,
+            new="failed",
+        )
+        assert fp.status.get("phase") == "Done"
+        assert fp.status["stages"]["monitor"]["status"] == "failed"
+        assert fp.meta.annotations.get(MONITOR_JOB_STATUS_ANNOTATION) == "processed"
+
+    async def test_ignores_processed_annotation(self) -> None:
+        fp = FakePatch()
+        await on_monitor_completion(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="ns",
+            status={},
+            patch=fp,
+            old="succeeded",
+            new="processed",
+        )
+        assert fp.status == {}
 
 
 # -- Backward compat alias ---------------------------------------------------

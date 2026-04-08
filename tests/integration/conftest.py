@@ -82,9 +82,13 @@ async def controller(
     handlers_mod.read_executor_result = scenario_store.read_executor_result  # type: ignore[assignment]
     handlers_mod.read_gates_result = scenario_store.read_gates_result  # type: ignore[assignment]
     handlers_mod.read_review_result = scenario_store.read_review_result  # type: ignore[assignment]
+    handlers_mod.read_monitor_result = scenario_store.read_monitor_result  # type: ignore[assignment]
 
     # Patch GitHub token reader to return a fake token
     handlers_mod._read_github_token = AsyncMock(return_value="fake-token")  # type: ignore[assignment]
+
+    # Patch pod log collector to return empty (no real pods to read from)
+    handlers_mod._collect_pod_logs = AsyncMock(return_value="")  # type: ignore[assignment]
 
     # Patch reviewer job builder to remove command override
     # (fake agent image is alpine, has no Python)
@@ -96,6 +100,16 @@ async def controller(
         return job
 
     sandbox_mod.build_reviewer_job = patched_build_reviewer  # type: ignore[assignment]
+
+    # Patch monitor job builder similarly
+    original_build_monitor = sandbox_mod.build_monitor_job
+
+    def patched_build_monitor(*args: Any, **kwargs: Any) -> Any:
+        job = original_build_monitor(*args, **kwargs)
+        job.spec.template.spec.containers[0].command = None
+        return job
+
+    sandbox_mod.build_monitor_job = patched_build_monitor  # type: ignore[assignment]
 
     # Set env vars for the agent image
     os.environ["NUBI_AGENT_IMAGE"] = FAKE_AGENT_IMAGE

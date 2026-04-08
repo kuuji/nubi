@@ -416,6 +416,7 @@ cmd_test() {
     local task_branch
     local executor_job_name
     local reviewer_job_name
+    local monitor_job_name
     local target_file
     local expected_content
     local work_dir
@@ -423,16 +424,19 @@ cmd_test() {
     local terminal_phase
     local job_status
     local reviewer_status
+    local monitor_status
     local workspace_branch
     local head_sha
     local remote_content
     local review_json
+    local monitor_json
 
     task_name="$(create_task_name)"
     task_namespace="nubi-${task_name}"
     task_branch="nubi/${task_name}"
     executor_job_name="nubi-executor-${task_name}"
     reviewer_job_name="nubi-reviewer-${task_name}"
+    monitor_job_name="nubi-monitor-${task_name}"
     target_file="TEST-${task_name}.txt"
     expected_content="Hello from Nubi live e2e ${task_name}"
 
@@ -446,6 +450,8 @@ cmd_test() {
         record_artifact "${work_dir}/executor-job.txt" describe job "${executor_job_name}" -n "${task_namespace}"
         record_artifact "${work_dir}/reviewer.log" logs "job/${reviewer_job_name}" -n "${task_namespace}"
         record_artifact "${work_dir}/reviewer-job.txt" describe job "${reviewer_job_name}" -n "${task_namespace}"
+        record_artifact "${work_dir}/monitor.log" logs "job/${monitor_job_name}" -n "${task_namespace}"
+        record_artifact "${work_dir}/monitor-job.txt" describe job "${monitor_job_name}" -n "${task_namespace}"
         record_artifact "${work_dir}/all-pods.txt" get pods -n "${task_namespace}" -o wide
         error "${message}"
         exit 1
@@ -523,10 +529,23 @@ EOF
     fi
     info "Reviewer job completed"
 
-    # --- Stage 3: Wait for terminal phase ---
+    # --- Stage 3: Wait for monitor job ---
+    info "Waiting for monitor job ${monitor_job_name}..."
+    if ! monitor_status="$(wait_for_named_job "${task_namespace}" "${monitor_job_name}" "${E2E_TIMEOUT_SECONDS}")"; then
+        fail_run "Timed out waiting for monitor job to appear or reach a terminal state"
+    fi
+
+    # Monitor job failure is graceful — task still goes to Done
+    if [ "${monitor_status}" != "Complete" ]; then
+        warn "Monitor job finished with status ${monitor_status} (graceful degradation)"
+    else
+        info "Monitor job completed"
+    fi
+
+    # --- Stage 4: Wait for terminal phase ---
     if ! terminal_phase="$(wait_for_terminal_phase "${task_name}" "${E2E_POST_JOB_PHASE_TIMEOUT_SECONDS}")"; then
         terminal_phase="$(get_taskspec_phase "${task_name}")"
-        fail_run "Reviewer Job completed, but TaskSpec phase remained ${terminal_phase:-<empty>} after ${E2E_POST_JOB_PHASE_TIMEOUT_SECONDS}s; controller status did not persist"
+        fail_run "Monitor Job completed, but TaskSpec phase remained ${terminal_phase:-<empty>} after ${E2E_POST_JOB_PHASE_TIMEOUT_SECONDS}s; controller status did not persist"
     fi
 
     # --- Collect artifacts ---
@@ -535,6 +554,8 @@ EOF
     record_artifact "${work_dir}/executor-job.txt" describe job "${executor_job_name}" -n "${task_namespace}"
     record_artifact "${work_dir}/reviewer.log" logs "job/${reviewer_job_name}" -n "${task_namespace}"
     record_artifact "${work_dir}/reviewer-job.txt" describe job "${reviewer_job_name}" -n "${task_namespace}"
+    record_artifact "${work_dir}/monitor.log" logs "job/${monitor_job_name}" -n "${task_namespace}"
+    record_artifact "${work_dir}/monitor-job.txt" describe job "${monitor_job_name}" -n "${task_namespace}"
     record_artifact "${work_dir}/all-pods.txt" get pods -n "${task_namespace}" -o wide
 
     # --- Verify phase ---
@@ -564,17 +585,28 @@ EOF
     fi
 
     # --- Verify review.json exists on branch ---
-    review_json="$(fetch_remote_file_content "${E2E_REPO}" "${task_branch}" ".nubi/review.json" 2>/dev/null || true)"
+    review_json="$(fetch_remote_file_content "${E2E_REPO}" "${task_branch}" ".nubi/${task_name}/review.json" 2>/dev/null || true)"
     if [ -z "${review_json}" ]; then
-        fail_run "Expected .nubi/review.json on branch ${task_branch}, but file not found"
+        fail_run "Expected .nubi/${task_name}/review.json on branch ${task_branch}, but file not found"
     fi
     info "review.json found on branch"
+
+    # --- Verify monitor.json exists on branch ---
+    monitor_json="$(fetch_remote_file_content "${E2E_REPO}" "${task_branch}" ".nubi/${task_name}/monitor.json" 2>/dev/null || true)"
+    if [ -n "${monitor_json}" ]; then
+        info "monitor.json found on branch"
+    else
+        warn "monitor.json not found on branch (monitor may have failed gracefully)"
+    fi
 
     info "Live e2e test passed"
     info "  TaskSpec: ${task_name}"
     info "  Namespace: ${task_namespace}"
     info "  Branch: ${task_branch}"
     info "  Review: $(echo "${review_json}" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("decision","?"))' 2>/dev/null || echo 'parse error')"
+    if [ -n "${monitor_json}" ]; then
+        info "  Monitor: $(echo "${monitor_json}" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("decision","?"))' 2>/dev/null || echo 'parse error')"
+    fi
 }
 
 case "${1:-}" in

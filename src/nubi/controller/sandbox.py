@@ -315,6 +315,182 @@ def build_reviewer_job(
     )
 
 
+def build_monitor_job(
+    task_name: str,
+    ns_name: str,
+    spec: TaskSpecSpec,
+    secret_name: str,
+    taskspec_namespace: str,
+    pod_logs_b64: str = "",
+    attempt: int = 1,
+) -> V1Job:
+    """Construct a gVisor-sandboxed monitor Job."""
+    suffix = f"-a{attempt}" if attempt > 1 else ""
+    job_name = f"nubi-monitor-{task_name}{suffix}"[:63]
+    timeout = parse_duration(spec.constraints.timeout)
+
+    env_from_secret = [
+        V1EnvVar(
+            name="GITHUB_TOKEN",
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(name=secret_name, key=CREDENTIAL_GITHUB_TOKEN),
+            ),
+        ),
+        V1EnvVar(
+            name="LLM_API_KEY",
+            value_from=V1EnvVarSource(
+                secret_key_ref=V1SecretKeySelector(name=secret_name, key=CREDENTIAL_LLM_API_KEY),
+            ),
+        ),
+    ]
+
+    # PR output config
+    pr_title_prefix = spec.output.pr.title_prefix if spec.output.pr else "nubi:"
+    pr_draft = str(spec.output.pr.draft).lower() if spec.output.pr else "true"
+    pr_labels = ",".join(spec.output.pr.labels) if spec.output.pr else ""
+
+    env_plain = [
+        V1EnvVar(name="NUBI_TASK_ID", value=task_name),
+        V1EnvVar(name="NUBI_REPO", value=spec.inputs.repo),
+        V1EnvVar(name="NUBI_BRANCH", value=spec.inputs.branch),
+        V1EnvVar(name="NUBI_DESCRIPTION", value=spec.description),
+        V1EnvVar(name="NUBI_TOOLS", value="monitor"),
+        V1EnvVar(name="NUBI_PR_TITLE_PREFIX", value=pr_title_prefix),
+        V1EnvVar(name="NUBI_PR_DRAFT", value=pr_draft),
+        V1EnvVar(name="NUBI_PR_LABELS", value=pr_labels),
+        V1EnvVar(
+            name="NUBI_LLM_PROVIDER",
+            value=os.environ.get(
+                "NUBI_MONITOR_LLM_PROVIDER",
+                os.environ.get("NUBI_LLM_PROVIDER", "anthropic"),
+            ),
+        ),
+        V1EnvVar(name="HOME", value="/workspace"),
+        V1EnvVar(name="GIT_CONFIG_COUNT", value="1"),
+        V1EnvVar(name="GIT_CONFIG_KEY_0", value="safe.directory"),
+        V1EnvVar(name="GIT_CONFIG_VALUE_0", value="/workspace"),
+    ]
+
+    if pod_logs_b64:
+        env_plain.append(V1EnvVar(name="NUBI_POD_LOGS", value=pod_logs_b64))
+
+    # Monitor-specific model overrides, falling back to shared config
+    model_id = os.environ.get("NUBI_MONITOR_MODEL_ID", os.environ.get("NUBI_MODEL_ID"))
+    if model_id:
+        env_plain.append(V1EnvVar(name="NUBI_MODEL_ID", value=model_id))
+    base_url = os.environ.get("NUBI_MONITOR_LLM_BASE_URL", os.environ.get("NUBI_LLM_BASE_URL"))
+    if base_url:
+        env_plain.append(V1EnvVar(name="NUBI_LLM_BASE_URL", value=base_url))
+
+    agent_image = os.environ.get("NUBI_AGENT_IMAGE", DEFAULT_AGENT_IMAGE)
+    pull_policy = os.environ.get("NUBI_AGENT_IMAGE_PULL_POLICY") or None
+
+    container = V1Container(
+        name="monitor",
+        image=agent_image,
+        image_pull_policy=pull_policy,
+        command=["python", "-m", "nubi.monitor_entrypoint"],
+        working_dir="/workspace",
+        resources=V1ResourceRequirements(
+            requests={
+                "cpu": spec.constraints.resources.cpu,
+                "memory": spec.constraints.resources.memory,
+            },
+            limits={
+                "cpu": spec.constraints.resources.cpu,
+                "memory": spec.constraints.resources.memory,
+            },
+        ),
+        security_context=V1SecurityContext(
+            run_as_non_root=True,
+            run_as_user=65534,
+            allow_privilege_escalation=False,
+            read_only_root_filesystem=True,
+            capabilities=V1Capabilities(drop=["ALL"]),
+            seccomp_profile=V1SeccompProfile(type="RuntimeDefault"),
+        ),
+        env=env_from_secret + env_plain,
+        volume_mounts=[
+            V1VolumeMount(name="workspace", mount_path="/workspace"),
+            V1VolumeMount(name="tmp", mount_path="/tmp"),
+        ],
+    )
+
+    rc = os.environ.get("NUBI_RUNTIME_CLASS", DEFAULT_GVISOR_RUNTIME_CLASS)
+
+    return V1Job(
+        metadata=V1ObjectMeta(
+            name=job_name,
+            namespace=ns_name,
+            labels={
+                LABEL_TASK_ID: task_name,
+                LABEL_TASKSPEC_NAMESPACE: taskspec_namespace,
+                LABEL_STAGE: "monitor",
+                LABEL_MANAGED_BY: "nubi",
+            },
+        ),
+        spec=V1JobSpec(
+            backoff_limit=0,
+            active_deadline_seconds=timeout,
+            ttl_seconds_after_finished=600,
+            template=V1PodTemplateSpec(
+                spec=V1PodSpec(
+                    runtime_class_name=rc if rc else None,
+                    restart_policy="Never",
+                    automount_service_account_token=False,
+                    containers=[container],
+                    volumes=[
+                        V1Volume(
+                            name="workspace",
+                            empty_dir=V1EmptyDirVolumeSource(size_limit="1Gi"),
+                        ),
+                        V1Volume(
+                            name="tmp",
+                            empty_dir=V1EmptyDirVolumeSource(size_limit="256Mi"),
+                        ),
+                    ],
+                ),
+            ),
+        ),
+    )
+
+
+async def create_monitor_job(
+    task_name: str,
+    ns_name: str,
+    spec: TaskSpecSpec,
+    secret_name: str,
+    taskspec_namespace: str,
+    pod_logs_b64: str = "",
+    attempt: int = 1,
+) -> str:
+    """Build and create the monitor Job. Idempotent (409 = no-op).
+
+    Returns the Job name.
+    """
+    job = build_monitor_job(
+        task_name,
+        ns_name,
+        spec,
+        secret_name,
+        taskspec_namespace,
+        pod_logs_b64=pod_logs_b64,
+        attempt=attempt,
+    )
+    job_name = job.metadata.name
+    batch_api = BatchV1Api()
+
+    try:
+        await batch_api.create_namespaced_job(namespace=ns_name, body=job)
+    except ApiException as exc:
+        if exc.status == 409:
+            logger.info("Job %s in %s already exists, continuing", job_name, ns_name)
+            return job_name
+        raise SandboxError(f"Failed to create job {job_name} in {ns_name}: {exc}") from exc
+
+    return job_name
+
+
 async def create_reviewer_job(
     task_name: str,
     ns_name: str,
