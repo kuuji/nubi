@@ -30,6 +30,7 @@ class MonitorConcern(BaseModel):
 class MonitorResult(BaseModel):
     decision: MonitorDecision
     summary: str = ""
+    pr_summary: str = ""
     concerns: list[MonitorConcern] = Field(default_factory=list)
     pr_url: str = ""
 

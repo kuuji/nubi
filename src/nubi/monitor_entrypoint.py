@@ -135,17 +135,19 @@ def main() -> int:
 
 def _build_pr_body(description: str, audit: MonitorResult) -> str:
     """Build the PR description body."""
-    lines = [
-        "## Task Description",
-        description,
-        "",
-        "## Monitor Audit",
-        f"**Decision:** {audit.decision.value}",
-        f"**Summary:** {audit.summary}",
-    ]
+    lines: list[str] = []
+
+    # Use the monitor's rich PR summary if available, otherwise fall back
+    if audit.pr_summary:
+        pr_text = audit.pr_summary.strip()
+        if not pr_text.startswith("#"):
+            lines.append("## Summary")
+        lines.append(pr_text)
+    else:
+        lines.extend(["## Summary", audit.summary or description])
 
     if audit.concerns:
-        lines.extend(["", "### Concerns"])
+        lines.extend(["", "## Concerns"])
         for c in audit.concerns:
             lines.append(f"- **[{c.severity}/{c.area}]** {c.description}")
 

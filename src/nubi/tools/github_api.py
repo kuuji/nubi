@@ -169,6 +169,7 @@ def write_monitor_result_to_branch(result: MonitorResult) -> bool:
 def submit_audit(
     decision: str,
     summary: str,
+    pr_summary: str = "",
     concerns: list[dict[str, object]] | None = None,
 ) -> str:
     """Submit your final audit decision.
@@ -178,6 +179,12 @@ def submit_audit(
     Args:
         decision: One of "approve" or "flag".
         summary: One-sentence summary of the audit outcome.
+        pr_summary: Markdown summary for the PR description. Write this as if you are
+            explaining the changes to a teammate reviewing the PR. Include:
+            - What was changed and why (from the task description)
+            - Key implementation decisions visible in the diff
+            - What was tested or validated (gate results, reviewer findings)
+            - Any caveats or follow-up items
         concerns: Optional list of concerns found. Each dict should have:
             severity (critical/major/minor), area (process/output/security), description.
     """
@@ -195,6 +202,7 @@ def submit_audit(
     _audit_result = MonitorResult(
         decision=parsed_decision,
         summary=summary,
+        pr_summary=pr_summary,
         concerns=parsed_concerns,
     )
 
