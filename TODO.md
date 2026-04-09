@@ -18,7 +18,7 @@
 
 ## Backlog
 - [ ] Context management — executor fills context running diagnostic commands on real projects. Need smarter output handling (truncation, summarization, scoped execution)
-- [ ] Deploy nubi + MCP server — Kustomize manifests, ArgoCD app, service account, ingress for MCP
+- [ ] Deploy nubi + MCP server — MCP Dockerfile, Kustomize base in kuuji/nubi (CRD, controller, MCP server, RBAC, services), then ArgoCD app in gitops repo. Have nubi do this as a dogfood test of non-code infrastructure work.
 - [ ] Planner as MCP skill — interactive task scoping through conversation, then submit via MCP
 - [ ] Langfuse integration — tracing, cost tracking, observability
 
