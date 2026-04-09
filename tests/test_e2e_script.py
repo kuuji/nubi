@@ -148,6 +148,11 @@ def kubectl_main() -> int:
         print("taskspec.nubi.io/e2e created")
         return 0
 
+    if "apply" in args and "-k" in args:
+        # Kustomize apply — just acknowledge it
+        print("namespace/nubi-system configured")
+        return 0
+
     if "jsonpath={.items[0].status.conditions[0].type}" in joined:
         print(
             next_sequence_value(
@@ -606,7 +611,7 @@ def test_up_command_triggers_controller_rollout_restart(tmp_path: Path) -> None:
     deploy_index = _find_logged_call_index(
         log_lines,
         "kubectl",
-        lambda args: args[:2] == ["apply", "-f"] and "manifests/deployment.yaml" in args,
+        lambda args: args[:2] == ["apply", "-k"] and "manifests/" in args,
     )
     restart_index = _find_logged_call_index(
         log_lines,

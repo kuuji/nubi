@@ -1,0 +1,23 @@
+{
+  "status": "success",
+  "commit_sha": "58d44b8686ede4c527a6cb098894c51d8829b688",
+  "summary": "Task completed with all gates passing",
+  "files_changed": [
+    ".nubi/deploy-manifests-20260409111108/gates.json",
+    ".nubi/deploy-manifests-20260409111108/monitor.json",
+    ".nubi/deploy-manifests-20260409111108/result.json",
+    ".nubi/deploy-manifests-20260409111108/review.json",
+    "images/mcp/Dockerfile",
+    "manifests/base/controller-deployment.yaml",
+    "manifests/base/kustomization.yaml",
+    "manifests/base/mcp-deployment.yaml",
+    "manifests/base/mcp-service.yaml",
+    "manifests/base/namespace.yaml",
+    "manifests/base/rbac.yaml",
+    "manifests/base/runtimeclass.yaml",
+    "manifests/base/serviceaccount.yaml",
+    "manifests/deployment.yaml",
+    "manifests/kustomization.yaml"
+  ],
+  "error": ""
+}

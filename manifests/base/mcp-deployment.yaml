@@ -1,0 +1,60 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nubi-mcp
+  namespace: nubi-system
+  labels:
+    app.kubernetes.io/name: nubi-mcp
+    app.kubernetes.io/component: mcp-server
+    app.kubernetes.io/managed-by: nubi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nubi-mcp
+      app.kubernetes.io/component: mcp-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nubi-mcp
+        app.kubernetes.io/component: mcp-server
+        app.kubernetes.io/managed-by: nubi
+    spec:
+      serviceAccountName: nubi-controller
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mcp
+          image: ghcr.io/kuuji/nubi-mcp:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "nubi.mcp"]
+          ports:
+            - containerPort: 8080
+              name: mcp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+          env:
+            - name: NUBI_MCP_PORT
+              value: "8080"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

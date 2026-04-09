@@ -366,7 +366,7 @@ cmd_up() {
         --dry-run=client -o yaml | kubectl apply -f - --context "${CONTEXT}"
 
     info "Deploying controller..."
-    kubectl apply -f manifests/deployment.yaml --context "${CONTEXT}"
+    kubectl apply -k manifests/ --context "${CONTEXT}"
 
     info "Restarting controller rollout..."
     kubectl rollout restart deployment/nubi-controller -n "${TASKSPEC_NAMESPACE}" --context "${CONTEXT}"
