@@ -243,6 +243,16 @@ def _run_command_gate(
     name = discovery.name
     category = discovery.category
 
+    # Skip if the tool isn't installed
+    if not which(name):
+        return GateResult(
+            name=name,
+            category=category,
+            status=GateStatus.SKIPPED,
+            output=f"{name} not found in PATH",
+            duration_seconds=time.time() - start_time,
+        )
+
     try:
         result = subprocess.run(
             cmd,
