@@ -1,0 +1,9 @@
+{
+  "decision": "ci-failed",
+  "summary": "CI checks timed_out",
+  "pr_summary": "",
+  "concerns": [],
+  "pr_url": "https://github.com/kuuji/nubi/pull/6",
+  "ci_status": "timed_out",
+  "ci_feedback": "CI checks did not complete within 600s"
+}
