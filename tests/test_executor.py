@@ -14,20 +14,23 @@ from nubi.agents.executor import (
 
 
 class TestCreateModel:
-    @patch("strands.models.anthropic.AnthropicModel")
-    def test_anthropic(self, mock_cls: MagicMock) -> None:
-        create_model("anthropic", "sk-test")
-        mock_cls.assert_called_once()
+    def test_anthropic(self) -> None:
+        mock_mod = MagicMock()
+        with patch.dict("sys.modules", {"strands.models.anthropic": mock_mod}):
+            create_model("anthropic", "sk-test")
+            mock_mod.AnthropicModel.assert_called_once()
 
-    @patch("strands.models.bedrock.BedrockModel")
-    def test_bedrock(self, mock_cls: MagicMock) -> None:
-        create_model("bedrock", "")
-        mock_cls.assert_called_once()
+    def test_bedrock(self) -> None:
+        mock_mod = MagicMock()
+        with patch.dict("sys.modules", {"strands.models.bedrock": mock_mod}):
+            create_model("bedrock", "")
+            mock_mod.BedrockModel.assert_called_once()
 
-    @patch("strands.models.openai.OpenAIModel")
-    def test_openai(self, mock_cls: MagicMock) -> None:
-        create_model("openai", "sk-test")
-        mock_cls.assert_called_once()
+    def test_openai(self) -> None:
+        mock_mod = MagicMock()
+        with patch.dict("sys.modules", {"strands.models.openai": mock_mod}):
+            create_model("openai", "sk-test")
+            mock_mod.OpenAIModel.assert_called_once()
 
     def test_unknown_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown LLM provider"):
