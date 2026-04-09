@@ -1,0 +1,70 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nubi-controller
+  namespace: nubi-system
+  labels:
+    app.kubernetes.io/name: nubi-controller
+    app.kubernetes.io/managed-by: nubi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nubi-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nubi-controller
+        app.kubernetes.io/managed-by: nubi
+    spec:
+      serviceAccountName: nubi-controller
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: controller
+          image: ghcr.io/kuuji/nubi-controller:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          env:
+            - name: NUBI_MASTER_SECRET_NAMESPACE
+              value: nubi-system
+            - name: NUBI_RUNTIME_CLASS
+              value: ""
+            - name: NUBI_LLM_PROVIDER
+              value: "openai"
+            - name: NUBI_MODEL_ID
+              value: "minimax/minimax-m2.7"
+            - name: NUBI_LLM_BASE_URL
+              value: "https://openrouter.ai/api/v1"
+            # Per-stage model overrides (reviewer falls back to shared config if unset)
+            # - name: NUBI_REVIEWER_LLM_PROVIDER
+            #   value: "openai"
+            # - name: NUBI_REVIEWER_MODEL_ID
+            #   value: "minimax/minimax-m2.7"
+            # - name: NUBI_REVIEWER_LLM_BASE_URL
+            #   value: "https://openrouter.ai/api/v1"
+            - name: NUBI_AGENT_IMAGE_PULL_POLICY
+              value: "IfNotPresent"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
