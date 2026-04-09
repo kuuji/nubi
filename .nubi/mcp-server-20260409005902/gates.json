@@ -1,0 +1,43 @@
+{
+  "discovered": [
+    {
+      "name": "radon",
+      "category": "complexity",
+      "applies_to": [
+        "*.py",
+        "src/**/*.py"
+      ],
+      "command": ""
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "applies_to": [
+        "*"
+      ],
+      "command": ""
+    }
+  ],
+  "gates": [
+    {
+      "name": "radon",
+      "category": "complexity",
+      "status": "passed",
+      "output": "{\"/workspace/src/nubi/mcp/k8s.py\": [{\"type\": \"function\", \"rank\": \"A\", \"lineno\": 55, \"name\": \"list_taskspecs\", \"col_offset\": 0, \"complexity\": 4, \"endline\": 79, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"lineno\": 16, \"name\": \"_load_config\", \"col_offset\": 0, \"complexity\": 2, \"endline\": 21, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"lineno\": 130, \"name\": \"get_pod_logs\", \"col_offset\": 0, \"complexity\": 2, \"endline\": 166, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"lineno\": 24, \"name\": \"create_taskspec\", \"col_offset\": 0, \"complexity\": 1, \"endline\": 51, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"lineno\": 82, \"name\": \"get_taskspec\", \"col_offset\": 0, \"complexity\": 1, \"endline\": 102, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"lineno\": 106, \"name\": \"delete_taskspec\", \"col_offset\": 0, \"complexity\": 1, \"endline\": 126, \"closures\": []}], \"/workspace/src/nubi/mcp/server.py\": [{\"type\": \"function\", \"rank\": \"A\", \"lineno\": 40, \"name\": \"create_taskspec\", \"col_offset\": 0, \"complexity\": 5, \"endline\": 69, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"lineno\": 73, \"name\": \"list_tasks\", \"col_offset\": 0, \"complexity\": 4, \"endline\": 106, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"lineno\": 185, \"name\": \"get_task_logs\", \"col_offset\": 0, \"complexity\": 3, \"endline\": 204, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"lineno\": 27, \"name\": \"_get_port\", \"col_offset\": 0, \"complexity\": 2, \"endline\": 33, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"lineno\": 110, \"name\": \"get_task_status\", \"col_offset\": 0, \"complexity\": 2, \"endline\": 181, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"lineno\": 208, \"name\": \"delete_taskspec\", \"col_offset\": 0, \"complexity\": 2, \"endline\": 217, \"closures\": []}], \"/workspace/tests/mcp/conftest.py\": [{\"type\": \"class\", \"rank\": \"A\", \"lineno\": 16, \"name\": \"MockApiException\", \"col_offset\": 0, \"complexity\": 2, \"endline\": 22, \"methods\": [{\"type\": \"method\", \"rank\": \"A\", \"lineno\": 19, \"name\": \"__init__\", \"classname\": \"MockApiException\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 22, \"closures\": []}]}, {\"type\": \"class\", \"rank\": \"A\", \"lineno\": 26, \"name\": \"MockFastMCP\", \"col_offset\": 0, \"complexity\": 2, \"endline\": 45, \"methods\": [{\"type\": \"method\", \"rank\": \"A\", \"lineno\": 29, \"name\": \"__init__\", \"classname\": \"MockFastMCP\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 32, \"closures\": []}, {\"type\": \"method\", \"rank\": \"A\", \"lineno\": 34, \"name\": \"tool\", \"classname\": \"MockFastMCP\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 41, \"closures\": [{\"type\": \"function\", \"rank\": \"A\", \"lineno\": 37, \"name\": \"decorator\", \"col_offset\": 8, \"complexity\": 1, \"endline\": 39, \"closures\": []}]}, {\"type\": \"method\", \"rank\": \"A\", \"lineno\": 43, \"name\": \"run\", \"classname\": \"MockFastMCP\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 45, \"closures\": []}]}, {\"type\": \"method\", \"rank\": \"A\", \"lineno\": 19, \"name\": \"__init__\", \"classname\": \"MockApiException\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 22, \"closures\": []}, {\"type\": \"method\", \"rank\": \"A\", \"lineno\": 29, \"name\": \"__init__\", \"classname\": \"MockFastMCP\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 32, \"closures\": []}, {\"type\": \"method\", \"rank\": \"A\", \"lineno\": 34, \"name\": \"tool\", \"classname\": \"MockFastMCP\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 41, \"closures\": [{\"type\": \"function\", \"rank\": \"A\", \"lineno\": 37, \"name\": \"decorator\", \"col_offset\": 8, \"complexity\": 1, \"endline\": 39, \"closures\": []}]}, {\"type\": \"method\", \"rank\": \"A\", \"lineno\": 43, \"name\": \"run\", \"classname\": \"MockFastMCP\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 45, \"closures\": []}], \"/workspace/tests/mcp/test_fixtures.py\": [{\"type\": \"class\", \"rank\": \"A\", \"lineno\": 19, \"name\": \"MockApiException\", \"col_offset\": 0, \"complexity\": 2, \"endline\": 25, \"methods\": [{\"type\": \"method\", \"rank\": \"A\", \"lineno\": 22, \"name\": \"__init__\", \"classname\": \"MockApiException\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 25, \"closures\": []}]}, {\"type\": \"class\", \"rank\": \"A\", \"lineno\": 33, \"name\": \"MockFastMCP\", \"col_offset\": 0, \"complexity\": 2, \"endline\": 52, \"methods\": [{\"type\": \"method\", \"rank\": \"A\", \"lineno\": 36, \"name\": \"__init__\", \"classname\": \"MockFastMCP\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 39, \"closures\": []}, {\"type\": \"method\", \"rank\": \"A\", \"lineno\": 41, \"name\": \"tool\", \"classname\": \"MockFastMCP\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 48, \"closures\": [{\"type\": \"function\", \"rank\": \"A\", \"lineno\": 44, \"name\": \"decorator\", \"col_offset\": 8, \"complexity\": 1, \"endline\": 46, \"closures\": []}]}, {\"type\": \"method\", \"rank\": \"A\", \"lineno\": 50, \"name\": \"run\", \"classname\": \"MockFastMCP\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 52, \"closures\": []}]}, {\"type\": \"function\", \"rank\": \"A\", \"lineno\": 60, \"name\": \"setup_mocks\", \"col_offset\": 0, \"complexity\": 1, \"endline\": 73, \"closures\": []}, {\"type\": \"method\", \"rank\": \"A\", \"lineno\": 22, \"name\": \"__init__\", \"classname\": \"MockApiException\", \"col_offset\": 4, \"complexity\": 1, \"endline\": 25, \"closures\": []}, {\"type\": \"method\", \"\n[truncated - 10354 characters omitted]",
+      "command": "radon cc -j /workspace/src/nubi/mcp/__init__.py /workspace/src/nubi/mcp/__main__.py /workspace/src/nubi/mcp/k8s.py /workspace/src/nubi/mcp/server.py /workspace/tests/mcp/__init__.py /workspace/tests/mcp/conftest.py /workspace/tests/mcp/test_fixtures.py /workspace/tests/mcp/test_server.py",
+      "duration_seconds": 0.1142416000366211,
+      "error": ""
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "status": "passed",
+      "output": " src/nubi/mcp/__init__.py   |   5 +\n src/nubi/mcp/__main__.py   |  15 ++\n src/nubi/mcp/k8s.py        | 166 +++++++++++++++++++\n src/nubi/mcp/server.py     | 221 ++++++++++++++++++++++++++\n tests/mcp/__init__.py      |   1 +\n tests/mcp/conftest.py      |  59 +++++++\n tests/mcp/test_fixtures.py | 149 +++++++++++++++++\n tests/mcp/test_server.py   | 388 +++++++++++++++++++++++++++++++++++++++++++++\n 8 files changed, 1004 insertions(+)\n",
+      "command": "git diff --stat origin/main..HEAD",
+      "duration_seconds": 0.0017828941345214844,
+      "error": ""
+    }
+  ],
+  "overall_passed": true,
+  "attempt": 1
+}
