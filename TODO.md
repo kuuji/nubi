@@ -17,7 +17,7 @@
 - [x] CI parity — same checks locally and in CI, integration tests with k3d in GitHub Actions
 
 ## Backlog
-- [ ] Context management via subagents — executor should never run diagnostic commands (mypy, pytest, ruff) directly. Instead, a `run_check` tool spawns a subagent that runs the command, reads the full output, reasons about it, and returns structured results (file/line/message, what to fix). Executor context stays lean (task + code + structured results), all noisy diagnostic output lives in subagent contexts. Not just for failures — subagents from the start for all check commands.
+- [ ] Context management — needs more research. Subagent approach (run_check) solved context overflow but lost error detail the executor needs to fix issues, and added latency. Scoped gates (lint/complexity on changed files only) help significantly. Possible directions: smarter truncation, selective subagent use for truly massive output only, or model-level context windowing. Open question.
 - [ ] Deploy nubi + MCP server — MCP Dockerfile, Kustomize base in kuuji/nubi (CRD, controller, MCP server, RBAC, services), then ArgoCD app in gitops repo. Have nubi do this as a dogfood test of non-code infrastructure work.
 - [ ] Planner as MCP skill — interactive task scoping through conversation, then submit via MCP
 - [ ] Langfuse integration — tracing, cost tracking, observability
