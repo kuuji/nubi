@@ -109,6 +109,10 @@ def build_executor_job(
     if base_url:
         env_plain.append(V1EnvVar(name="NUBI_LLM_BASE_URL", value=base_url))
 
+    check_model_id = os.environ.get("NUBI_CHECK_MODEL_ID")
+    if check_model_id:
+        env_plain.append(V1EnvVar(name="NUBI_CHECK_MODEL_ID", value=check_model_id))
+
     if reviewer_feedback:
         env_plain.append(V1EnvVar(name="NUBI_REVIEWER_FEEDBACK", value=reviewer_feedback))
 

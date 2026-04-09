@@ -32,6 +32,13 @@ class TestCreateModel:
             create_model("openai", "sk-test")
             mock_mod.OpenAIModel.assert_called_once()
 
+    def test_model_id_override(self) -> None:
+        mock_mod = MagicMock()
+        with patch.dict("sys.modules", {"strands.models.openai": mock_mod}):
+            create_model("openai", "sk-test", model_id="custom-model")
+            call_kwargs = mock_mod.OpenAIModel.call_args.kwargs
+            assert call_kwargs["model_id"] == "custom-model"
+
     def test_unknown_raises(self) -> None:
         with pytest.raises(ValueError, match="Unknown LLM provider"):
             create_model("unknown", "key")

@@ -10,6 +10,10 @@ class TestToolGroups:
         assert "shell" in TOOL_GROUPS
         assert len(TOOL_GROUPS["shell"]) == 1
 
+    def test_check_group(self) -> None:
+        assert "check" in TOOL_GROUPS
+        assert len(TOOL_GROUPS["check"]) == 1
+
     def test_git_group(self) -> None:
         assert "git" in TOOL_GROUPS
         assert len(TOOL_GROUPS["git"]) == 5

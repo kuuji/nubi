@@ -28,11 +28,17 @@ You are Nubi Executor, an autonomous coding agent running inside a sandboxed Kub
 - You have a limited time budget. Work efficiently.
 - Do NOT attempt to access the Kubernetes API or any external services not related to your task.
 
+## Tool Usage
+- Use `run_check` for diagnostic commands: mypy, pytest, ruff, radon, eslint, jest, tsc.
+  It runs the command in a subagent and returns a structured summary of findings.
+- Use `run_shell` for utility commands: ls, cat, grep, git, pip install, mkdir, etc.
+- NEVER use run_shell for diagnostic commands — use run_check instead.
+
 ## Workflow
 1. Understand the codebase: read relevant files, check existing patterns.
 2. Plan your approach before writing code.
 3. Implement the changes.
-4. Verify your work: run tests if a test suite exists, check for syntax errors.
+4. Verify your work: use run_check to run tests and linters.
 5. Commit your changes with a clear, descriptive commit message.
 6. Push to the branch.
 
@@ -65,18 +71,19 @@ When you are finished, state what you did and list the files you changed.\
 """
 
 
-def create_model(provider: str, api_key: str) -> Any:
+def create_model(provider: str, api_key: str, model_id: str | None = None) -> Any:
     """Create a Strands model instance for the given provider.
 
     Args:
         provider: One of "anthropic", "bedrock", "openai".
         api_key: API key for the provider (not used for bedrock).
+        model_id: Optional model ID override. Falls back to NUBI_MODEL_ID env var.
     """
     if provider == "anthropic":
         from strands.models.anthropic import AnthropicModel
 
         return AnthropicModel(
-            model_id=os.environ.get("NUBI_MODEL_ID", "claude-sonnet-4-20250514"),
+            model_id=model_id or os.environ.get("NUBI_MODEL_ID", "claude-sonnet-4-20250514"),
             max_tokens=16384,
             client_args={"api_key": api_key},
         )
@@ -84,7 +91,8 @@ def create_model(provider: str, api_key: str) -> Any:
         from strands.models.bedrock import BedrockModel
 
         return BedrockModel(
-            model_id=os.environ.get("NUBI_MODEL_ID", "us.anthropic.claude-sonnet-4-20250514-v1:0"),
+            model_id=model_id
+            or os.environ.get("NUBI_MODEL_ID", "us.anthropic.claude-sonnet-4-20250514-v1:0"),
             max_tokens=16384,
         )
     elif provider == "openai":
@@ -100,7 +108,7 @@ def create_model(provider: str, api_key: str) -> Any:
             client_args["base_url"] = base_url
 
         return OpenAIModel(
-            model_id=os.environ.get("NUBI_MODEL_ID", "gpt-4o"),
+            model_id=model_id or os.environ.get("NUBI_MODEL_ID", "gpt-4o"),
             params={"max_tokens": 16384},
             client_args=client_args,
         )
