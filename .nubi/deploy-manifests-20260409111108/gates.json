@@ -1,0 +1,85 @@
+{
+  "discovered": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "applies_to": [],
+      "command": "ruff check src/ tests/"
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "applies_to": [],
+      "command": "ruff format --check src/ tests/"
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "applies_to": [],
+      "command": "mypy src/nubi/"
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "applies_to": [],
+      "command": "pytest tests/ -v"
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "applies_to": [
+        "*"
+      ],
+      "command": ""
+    }
+  ],
+  "gates": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "status": "skipped",
+      "output": "ruff not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00007510185241699219,
+      "error": ""
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "status": "skipped",
+      "output": "ruff not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00005078315734863281,
+      "error": ""
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "status": "skipped",
+      "output": "mypy not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00007843971252441406,
+      "error": ""
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "status": "skipped",
+      "output": "pytest not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00006246566772460938,
+      "error": ""
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "status": "passed",
+      "output": " images/mcp/Dockerfile                     |  28 ++++++\n manifests/base/controller-deployment.yaml |  70 ++++++++++++++\n manifests/base/kustomization.yaml         |  14 +++\n manifests/base/mcp-deployment.yaml        |  60 ++++++++++++\n manifests/base/mcp-service.yaml           |  20 ++++\n manifests/base/namespace.yaml             |   7 ++\n manifests/base/rbac.yaml                  |  61 ++++++++++++\n manifests/base/runtimeclass.yaml          |   7 ++\n manifests/base/serviceaccount.yaml        |   6 ++\n manifests/deployment.yaml                 | 151 ------------------------------\n manifests/kustomization.yaml              |   5 +\n 11 files changed, 278 insertions(+), 151 deletions(-)\n",
+      "command": "git diff --stat origin/main..HEAD",
+      "duration_seconds": 0.00403904914855957,
+      "error": ""
+    }
+  ],
+  "overall_passed": true,
+  "attempt": 1
+}

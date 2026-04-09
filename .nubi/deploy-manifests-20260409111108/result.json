@@ -1,0 +1,19 @@
+{
+  "status": "success",
+  "commit_sha": "98a21370516d5701c26a1c66051c3c56aadfa8ce",
+  "summary": "Task completed with all gates passing",
+  "files_changed": [
+    "images/mcp/Dockerfile",
+    "manifests/base/controller-deployment.yaml",
+    "manifests/base/kustomization.yaml",
+    "manifests/base/mcp-deployment.yaml",
+    "manifests/base/mcp-service.yaml",
+    "manifests/base/namespace.yaml",
+    "manifests/base/rbac.yaml",
+    "manifests/base/runtimeclass.yaml",
+    "manifests/base/serviceaccount.yaml",
+    "manifests/deployment.yaml",
+    "manifests/kustomization.yaml"
+  ],
+  "error": ""
+}
