@@ -5,8 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from nubi.tools.check import configure as configure_check
-from nubi.tools.check import run_check, run_checks
 from nubi.tools.files import configure as configure_files
 from nubi.tools.files import file_list, file_read, file_write
 from nubi.tools.gates import discover_gates, run_gates
@@ -20,7 +18,6 @@ from nubi.tools.shell import run_shell
 
 TOOL_GROUPS: dict[str, list[Callable[..., Any]]] = {
     "shell": [run_shell],
-    "check": [run_check, run_checks],
     "git": [git_diff, git_log, git_commit, git_push, git_status],
     "git_read": [git_diff, git_log, git_status],
     "file_read": [file_read],
@@ -50,7 +47,6 @@ def get_tools(allowed: list[str], workspace: str) -> list[Callable[..., Any]]:
     configure_shell(workspace)
     configure_git(workspace)
     configure_files(workspace)
-    configure_check(workspace)
 
     tools: list[Callable[..., Any]] = []
     for name in allowed:

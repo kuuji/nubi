@@ -164,7 +164,7 @@ def main() -> int:
     repo = os.environ["NUBI_REPO"]
     branch = os.environ["NUBI_BRANCH"]
     description = os.environ["NUBI_DESCRIPTION"]
-    tools_csv = os.environ.get("NUBI_TOOLS", "shell,check,git,file_read,file_write,gate")
+    tools_csv = os.environ.get("NUBI_TOOLS", "shell,git,file_read,file_write,gate")
     provider = os.environ.get("NUBI_LLM_PROVIDER", "anthropic")
     token = os.environ["GITHUB_TOKEN"]
     api_key = os.environ["LLM_API_KEY"]
