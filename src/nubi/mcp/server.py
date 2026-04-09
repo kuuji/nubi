@@ -11,7 +11,7 @@ This server provides MCP tools for managing Nubi TaskSpec resources:
 from __future__ import annotations
 
 import os
-from typing import Annotated
+from typing import Annotated, Any
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import ValidationError
@@ -39,7 +39,7 @@ mcp = FastMCP(SERVER_NAME, port=_get_port())
 @mcp.tool()
 def create_taskspec(
     name: Annotated[str, "TaskSpec name (must be DNS-compatible)"],
-    spec: Annotated[dict, "Full TaskSpec spec as JSON object"],
+    spec: Annotated[dict[str, Any], "Full TaskSpec spec as JSON object"],
     namespace: Annotated[str, "Kubernetes namespace"] = "nubi-system",
 ) -> str:
     """Create a new TaskSpec custom resource.

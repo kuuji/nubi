@@ -30,7 +30,7 @@ def _ensure_config() -> None:
         _config_loaded = True
 
 
-def create_taskspec(name: str, namespace: str, spec: dict) -> dict:
+def create_taskspec(name: str, namespace: str, spec: dict[str, Any]) -> dict[str, Any]:
     """Create a TaskSpec custom resource in the cluster.
 
     Args:
@@ -52,16 +52,17 @@ def create_taskspec(name: str, namespace: str, spec: dict) -> dict:
         "metadata": {"name": name, "namespace": namespace},
         "spec": spec,
     }
-    return api.create_namespaced_custom_object(
+    result: dict[str, Any] = api.create_namespaced_custom_object(
         group="nubi.io",
         version="v1",
         namespace=namespace,
         plural="taskspecs",
         body=body,
     )
+    return result
 
 
-def list_taskspecs(namespace: str, phase: str = "") -> list[dict]:
+def list_taskspecs(namespace: str, phase: str = "") -> list[dict[str, Any]]:
     """List TaskSpec resources in a namespace.
 
     Args:
@@ -82,13 +83,13 @@ def list_taskspecs(namespace: str, phase: str = "") -> list[dict]:
         namespace=namespace,
         plural="taskspecs",
     )
-    items: list[dict] = result.get("items", [])
+    items: list[dict[str, Any]] = result.get("items", [])
     if phase:
         items = [item for item in items if item.get("status", {}).get("phase") == phase]
     return items
 
 
-def get_taskspec(name: str, namespace: str) -> dict:
+def get_taskspec(name: str, namespace: str) -> dict[str, Any]:
     """Get a single TaskSpec resource.
 
     Args:
@@ -103,16 +104,17 @@ def get_taskspec(name: str, namespace: str) -> dict:
     """
     _ensure_config()
     api = client.CustomObjectsApi()
-    return api.get_namespaced_custom_object(
+    result: dict[str, Any] = api.get_namespaced_custom_object(
         group="nubi.io",
         version="v1",
         namespace=namespace,
         plural="taskspecs",
         name=name,
     )
+    return result
 
 
-def delete_taskspec(name: str, namespace: str) -> dict:
+def delete_taskspec(name: str, namespace: str) -> dict[str, Any]:
     """Delete a TaskSpec resource.
 
     Args:
@@ -127,13 +129,14 @@ def delete_taskspec(name: str, namespace: str) -> dict:
     """
     _ensure_config()
     api = client.CustomObjectsApi()
-    return api.delete_namespaced_custom_object(
+    result: dict[str, Any] = api.delete_namespaced_custom_object(
         group="nubi.io",
         version="v1",
         namespace=namespace,
         plural="taskspecs",
         name=name,
     )
+    return result
 
 
 def get_pod_logs(name: str, namespace: str, stage: str) -> str:
@@ -167,7 +170,7 @@ def get_pod_logs(name: str, namespace: str, stage: str) -> str:
         )
 
     pod = pods.items[0]
-    logs = core_api.read_namespaced_pod_log(
+    logs: str = core_api.read_namespaced_pod_log(
         name=pod.metadata.name,
         namespace=task_namespace,
         tail_lines=200,

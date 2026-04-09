@@ -10,7 +10,6 @@ from __future__ import annotations
 import sys
 from unittest.mock import MagicMock
 
-
 # =============================================================================
 # Mock ApiException class
 # =============================================================================
@@ -55,6 +54,7 @@ class MockFastMCP:
 # =============================================================================
 # Module setup for testing
 # =============================================================================
+
 
 # Set up mocks for external dependencies before any imports
 def setup_mocks() -> None:

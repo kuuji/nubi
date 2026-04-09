@@ -20,12 +20,11 @@ from tests.mcp.test_fixtures import setup_mocks
 setup_mocks()
 
 # Import fixtures after mocks are set up
-from tests.mcp.test_fixtures import (
-    VALID_SPEC,
+from tests.mcp.test_fixtures import (  # noqa: E402
     TASK_CR,
+    VALID_SPEC,
     MockApiException,
 )
-
 
 # =============================================================================
 # create_taskspec tests
