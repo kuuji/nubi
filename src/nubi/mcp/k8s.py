@@ -1,0 +1,166 @@
+"""Kubernetes client helpers for the Nubi MCP server.
+
+Wraps the official kubernetes Python client to provide a clean interface
+for TaskSpec CRUD operations. Uses incluster config when running in K8s,
+falls back to kubeconfig for local development.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from kubernetes import client, config
+from kubernetes.client import ApiException
+
+
+def _load_config() -> None:
+    """Load Kubernetes config. Uses incluster config first, falls back to kubeconfig."""
+    try:
+        config.load_incluster_config()
+    except config.ConfigException:
+        config.load_kube_config()
+
+
+def create_taskspec(name: str, namespace: str, spec: dict) -> dict:
+    """Create a TaskSpec custom resource in the cluster.
+
+    Args:
+        name: TaskSpec name (must be DNS-compatible).
+        namespace: Kubernetes namespace.
+        spec: The TaskSpec spec as a dict.
+
+    Returns:
+        The created TaskSpec resource as a dict.
+
+    Raises:
+        ApiException: If the API call fails.
+    """
+    _load_config()
+    api = client.CustomObjectsApi()
+    body: dict[str, Any] = {
+        "apiVersion": "nubi.io/v1",
+        "kind": "TaskSpec",
+        "metadata": {"name": name, "namespace": namespace},
+        "spec": spec,
+    }
+    return api.create_namespaced_custom_object(
+        group="nubi.io",
+        version="v1",
+        namespace=namespace,
+        plural="taskspecs",
+        body=body,
+    )
+
+
+def list_taskspecs(namespace: str, phase: str = "") -> list[dict]:
+    """List TaskSpec resources in a namespace.
+
+    Args:
+        namespace: Kubernetes namespace.
+        phase: Optional phase filter.
+
+    Returns:
+        List of TaskSpec resources as dicts.
+
+    Raises:
+        ApiException: If the API call fails.
+    """
+    _load_config()
+    api = client.CustomObjectsApi()
+    result = api.list_namespaced_custom_object(
+        group="nubi.io",
+        version="v1",
+        namespace=namespace,
+        plural="taskspecs",
+    )
+    items: list[dict] = result.get("items", [])
+    if phase:
+        items = [item for item in items if item.get("status", {}).get("phase") == phase]
+    return items
+
+
+def get_taskspec(name: str, namespace: str) -> dict:
+    """Get a single TaskSpec resource.
+
+    Args:
+        name: TaskSpec name.
+        namespace: Kubernetes namespace.
+
+    Returns:
+        The TaskSpec resource as a dict.
+
+    Raises:
+        ApiException: If the TaskSpec is not found (404).
+    """
+    _load_config()
+    api = client.CustomObjectsApi()
+    return api.get_namespaced_custom_object(
+        group="nubi.io",
+        version="v1",
+        namespace=namespace,
+        plural="taskspecs",
+        name=name,
+    )
+
+
+def delete_taskspec(name: str, namespace: str) -> dict:
+    """Delete a TaskSpec resource.
+
+    Args:
+        name: TaskSpec name.
+        namespace: Kubernetes namespace.
+
+    Returns:
+        The delete response as a dict.
+
+    Raises:
+        ApiException: If the TaskSpec is not found (404).
+    """
+    _load_config()
+    api = client.CustomObjectsApi()
+    return api.delete_namespaced_custom_object(
+        group="nubi.io",
+        version="v1",
+        namespace=namespace,
+        plural="taskspecs",
+        name=name,
+    )
+
+
+def get_pod_logs(name: str, namespace: str, stage: str) -> str:
+    """Get logs from a pod for a specific task stage.
+
+    Args:
+        name: TaskSpec name (used to find the task namespace).
+        namespace: TaskSpec namespace (typically nubi-system).
+        stage: Stage name (executor, reviewer, monitor).
+
+    Returns:
+        Pod logs as a string (last 200 lines).
+
+    Raises:
+        ApiException: If no pod is found or logs cannot be retrieved.
+    """
+    _load_config()
+    core_api = client.CoreV1Api()
+    task_namespace = f"nubi-{name}"
+
+    label_selector = f"nubi.io/stage={stage},nubi.io/taskspec={name}"
+    pods = core_api.list_namespaced_pod(
+        namespace=task_namespace,
+        label_selector=label_selector,
+    )
+
+    if not pods.items:
+        raise ApiException(
+            status=404,
+            reason=f"No pod found for stage '{stage}' in namespace '{task_namespace}'",
+        )
+
+    pod = pods.items[0]
+    logs = core_api.read_namespaced_pod_log(
+        name=pod.metadata.name,
+        namespace=task_namespace,
+        tail_lines=200,
+    )
+    return logs
