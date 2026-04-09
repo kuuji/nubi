@@ -25,7 +25,7 @@ class TestGateCategory:
             assert GateCategory(value) == value
 
     def test_category_count(self) -> None:
-        assert len(GateCategory) == 5
+        assert len(GateCategory) == 6
 
     def test_category_is_string_enum(self) -> None:
         assert isinstance(GateCategory.COMPLEXITY, str)

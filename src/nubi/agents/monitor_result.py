@@ -19,6 +19,7 @@ def monitor_file_path(task_id: str) -> str:
 class MonitorDecision(StrEnum):
     APPROVE = "approve"
     FLAG = "flag"
+    CI_FAILED = "ci-failed"
 
 
 class MonitorConcern(BaseModel):
@@ -33,6 +34,8 @@ class MonitorResult(BaseModel):
     pr_summary: str = ""
     concerns: list[MonitorConcern] = Field(default_factory=list)
     pr_url: str = ""
+    ci_status: str = ""
+    ci_feedback: str = ""
 
 
 def write_monitor_result(result: MonitorResult, workspace: str, task_id: str) -> None:

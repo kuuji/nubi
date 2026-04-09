@@ -377,9 +377,7 @@ class TestRunSingleGate:
             MagicMock(returncode=0, stdout="No issues found", stderr=""),
         ]
 
-        discovery = GateDiscovery(
-            name="ruff", category=GateCategory.LINT, command="ruff check /workspace"
-        )
+        discovery = GateDiscovery(name="ruff", category=GateCategory.LINT)
         result = _run_single_gate(discovery, "/workspace", GatePolicy(), timeout=300)
 
         assert result.status == GateStatus.PASSED
@@ -397,9 +395,7 @@ class TestRunSingleGate:
             MagicMock(returncode=1, stdout="Errors found", stderr=""),
         ]
 
-        discovery = GateDiscovery(
-            name="ruff", category=GateCategory.LINT, command="ruff check /workspace"
-        )
+        discovery = GateDiscovery(name="ruff", category=GateCategory.LINT)
         result = _run_single_gate(discovery, "/workspace", GatePolicy(), timeout=300)
 
         assert result.status == GateStatus.FAILED
@@ -412,9 +408,7 @@ class TestRunSingleGate:
         mock_which.return_value = "/usr/bin/pytest"
         mock_subprocess.return_value = MagicMock(returncode=1, stdout="2 failed", stderr="")
 
-        discovery = GateDiscovery(
-            name="pytest", category=GateCategory.TEST, command="pytest /workspace"
-        )
+        discovery = GateDiscovery(name="pytest", category=GateCategory.TEST)
         result = _run_single_gate(discovery, "/workspace", GatePolicy(), timeout=300)
 
         assert result.status == GateStatus.FAILED
@@ -433,9 +427,7 @@ class TestRunSingleGate:
             subprocess.TimeoutExpired("ruff", timeout=300),
         ]
 
-        discovery = GateDiscovery(
-            name="ruff", category=GateCategory.LINT, command="ruff check /workspace"
-        )
+        discovery = GateDiscovery(name="ruff", category=GateCategory.LINT)
         result = _run_single_gate(discovery, "/workspace", GatePolicy(), timeout=300)
 
         assert result.status == GateStatus.FAILED
@@ -462,7 +454,6 @@ class TestRunSingleGate:
         discovery = GateDiscovery(
             name="radon",
             category=GateCategory.COMPLEXITY,
-            command="radon cc -j /workspace",
         )
         result = _run_single_gate(discovery, "/workspace", GatePolicy(), timeout=300)
 
@@ -489,7 +480,6 @@ class TestRunSingleGate:
         discovery = GateDiscovery(
             name="radon",
             category=GateCategory.COMPLEXITY,
-            command="radon cc -j /workspace",
         )
         result = _run_single_gate(discovery, "/workspace", GatePolicy(), timeout=300)
 

@@ -193,13 +193,38 @@ def main() -> int:
             with open(gitignore_path, "w") as f:
                 f.write(".cache/\n.local/\n__pycache__/\n*.pyc\n.venv/\n")
 
-        subprocess.run(
-            ["git", "checkout", "-b", task_branch],
+        # Check if task branch already exists on remote (iterative refinement)
+        branch_check = subprocess.run(
+            ["git", "ls-remote", "--heads", "origin", task_branch],
             cwd=workspace,
             capture_output=True,
             text=True,
-            check=True,
         )
+        if branch_check.stdout.strip():
+            subprocess.run(
+                ["git", "fetch", "origin", task_branch],
+                cwd=workspace,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "checkout", task_branch],
+                cwd=workspace,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            logger.info("Checked out existing branch %s", task_branch)
+        else:
+            subprocess.run(
+                ["git", "checkout", "-b", task_branch],
+                cwd=workspace,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            logger.info("Created new branch %s", task_branch)
 
         allowed_tools = [t.strip() for t in tools_csv.split(",") if t.strip()]
         tools = get_tools(allowed_tools, workspace)

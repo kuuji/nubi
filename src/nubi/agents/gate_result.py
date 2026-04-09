@@ -17,6 +17,7 @@ def gates_file_path(task_id: str) -> str:
 
 class GateCategory(StrEnum):
     COMPLEXITY = "complexity"
+    FORMAT = "format"
     LINT = "lint"
     TEST = "test"
     SECRET_SCAN = "secret_scan"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import time
 from typing import Any
 
 import httpx
@@ -104,7 +105,9 @@ def list_branch_files(path: str = "") -> str:
 
 @tool
 def create_pull_request(title: str, body: str) -> str:
-    """Create a GitHub pull request from the task branch to the base branch.
+    """Create or update a GitHub pull request from the task branch to the base branch.
+
+    If a PR already exists for this branch, updates its title and body instead.
 
     Args:
         title: PR title.
@@ -122,8 +125,36 @@ def create_pull_request(title: str, body: str) -> str:
         pr_data = resp.json()
         return f"PR created: {pr_data['html_url']}"
     if resp.status_code == 422:
-        return f"PR already exists or validation error: {resp.text}"
+        existing = _find_existing_pr()
+        if existing:
+            _update_pr(existing["number"], title, body)
+            return f"PR updated: {existing['html_url']}"
+        return f"PR validation error: {resp.text}"
     return f"Error creating PR: {resp.status_code} {resp.text}"
+
+
+def _find_existing_pr() -> dict[str, Any] | None:
+    """Find an existing open PR from the task branch."""
+    owner = _repo.split("/")[0]
+    url = f"{GITHUB_API_BASE}/repos/{_repo}/pulls"
+    params = {"head": f"{owner}:{_task_branch}", "state": "open"}
+    resp = httpx.get(url, headers=_headers(), params=params, timeout=30)
+    if resp.status_code == 200:
+        prs = resp.json()
+        if prs:
+            return prs[0]  # type: ignore[no-any-return]
+    return None
+
+
+def _update_pr(pr_number: int, title: str, body: str) -> None:
+    """Update an existing PR's title and body."""
+    url = f"{GITHUB_API_BASE}/repos/{_repo}/pulls/{pr_number}"
+    httpx.patch(
+        url,
+        headers=_headers(),
+        json={"title": title, "body": body},
+        timeout=30,
+    )
 
 
 def _task_id_from_branch() -> str:
@@ -131,6 +162,88 @@ def _task_id_from_branch() -> str:
     if _task_branch.startswith("nubi/"):
         return _task_branch[len("nubi/") :]
     return _task_branch
+
+
+def poll_ci_checks(
+    timeout_seconds: int = 600,
+    poll_interval: int = 30,
+) -> tuple[str, str]:
+    """Poll GitHub Checks API until CI completes or timeout.
+
+    Returns (status, feedback) where:
+    - status: "success", "failure", or "timed_out"
+    - feedback: details of failed checks on failure, empty on success
+    """
+    # Get HEAD SHA of the task branch
+    url = f"{GITHUB_API_BASE}/repos/{_repo}/git/ref/heads/{_task_branch}"
+    resp = httpx.get(url, headers=_headers(), timeout=30)
+    if resp.status_code != 200:
+        return "failure", f"Could not resolve branch HEAD: {resp.status_code}"
+    head_sha = resp.json()["object"]["sha"]
+
+    deadline = time.time() + timeout_seconds
+    logger.info("Polling CI checks for %s@%s (sha=%s)", _repo, _task_branch, head_sha[:8])
+
+    while time.time() < deadline:
+        check_url = f"{GITHUB_API_BASE}/repos/{_repo}/commits/{head_sha}/check-suites"
+        resp = httpx.get(check_url, headers=_headers(), timeout=30)
+        if resp.status_code != 200:
+            time.sleep(poll_interval)
+            continue
+
+        suites = resp.json().get("check_suites", [])
+        if not suites:
+            time.sleep(poll_interval)
+            continue
+
+        # Check if all suites have concluded
+        all_concluded = all(s.get("conclusion") is not None for s in suites)
+        if not all_concluded:
+            time.sleep(poll_interval)
+            continue
+
+        # All concluded — check for failures
+        failed_suites = [
+            s for s in suites if s.get("conclusion") not in ("success", "neutral", "skipped")
+        ]
+        if not failed_suites:
+            logger.info("All CI checks passed")
+            return "success", ""
+
+        # Get details of failed check runs
+        feedback = _get_failed_check_runs_feedback(head_sha)
+        logger.warning("CI checks failed: %s", feedback[:200])
+        return "failure", feedback
+
+    logger.warning("CI check polling timed out after %ds", timeout_seconds)
+    return "timed_out", f"CI checks did not complete within {timeout_seconds}s"
+
+
+def _get_failed_check_runs_feedback(commit_sha: str) -> str:
+    """Fetch details of failed check runs for a commit."""
+    url = f"{GITHUB_API_BASE}/repos/{_repo}/commits/{commit_sha}/check-runs"
+    resp = httpx.get(url, headers=_headers(), timeout=30)
+    if resp.status_code != 200:
+        return "Could not fetch check run details"
+
+    check_runs = resp.json().get("check_runs", [])
+    failed = [cr for cr in check_runs if cr.get("conclusion") == "failure"]
+
+    if not failed:
+        return "Check suite failed but no individual check run failures found"
+
+    parts: list[str] = []
+    for cr in failed:
+        name = cr.get("name", "unknown")
+        output = cr.get("output", {})
+        summary = output.get("summary", "") or output.get("title", "")
+        text = output.get("text", "")
+        detail = summary or text
+        if len(detail) > 1000:
+            detail = detail[:1000] + "..."
+        parts.append(f"### {name}\n{detail}" if detail else f"### {name}\nNo details")
+
+    return "\n\n".join(parts)
 
 
 def write_monitor_result_to_branch(result: MonitorResult) -> bool:

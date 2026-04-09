@@ -327,7 +327,9 @@ def build_monitor_job(
     """Construct a gVisor-sandboxed monitor Job."""
     suffix = f"-a{attempt}" if attempt > 1 else ""
     job_name = f"nubi-monitor-{task_name}{suffix}"[:63]
-    timeout = parse_duration(spec.constraints.timeout)
+    # Monitor needs extra time for CI polling on top of the constraint timeout
+    ci_timeout = int(os.environ.get("NUBI_CI_TIMEOUT", "600"))
+    timeout = parse_duration(spec.constraints.timeout) + ci_timeout
 
     env_from_secret = [
         V1EnvVar(
@@ -373,6 +375,12 @@ def build_monitor_job(
 
     if pod_logs_b64:
         env_plain.append(V1EnvVar(name="NUBI_POD_LOGS", value=pod_logs_b64))
+
+    # CI check polling config
+    ci_timeout_str = os.environ.get("NUBI_CI_TIMEOUT", "600")
+    env_plain.append(V1EnvVar(name="NUBI_CI_TIMEOUT", value=ci_timeout_str))
+    ci_poll_str = os.environ.get("NUBI_CI_POLL_INTERVAL", "30")
+    env_plain.append(V1EnvVar(name="NUBI_CI_POLL_INTERVAL", value=ci_poll_str))
 
     # Monitor-specific model overrides, falling back to shared config
     model_id = os.environ.get("NUBI_MONITOR_MODEL_ID", os.environ.get("NUBI_MODEL_ID"))

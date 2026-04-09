@@ -16,6 +16,7 @@ from nubi.tools.github_api import (
     create_pull_request,
     get_audit_result,
     list_branch_files,
+    poll_ci_checks,
     read_branch_file,
     read_diff,
     submit_audit,
@@ -117,6 +118,27 @@ def main() -> int:
             # Extract PR URL from result
             if "PR created:" in result:
                 audit.pr_url = result.split("PR created: ", 1)[1].strip()
+            elif "PR updated:" in result:
+                audit.pr_url = result.split("PR updated: ", 1)[1].strip()
+
+            # Poll CI checks if PR was created/updated
+            if audit.pr_url:
+                ci_timeout = int(os.environ.get("NUBI_CI_TIMEOUT", "600"))
+                ci_poll = int(os.environ.get("NUBI_CI_POLL_INTERVAL", "30"))
+                logger.info("Polling CI checks (timeout=%ds)...", ci_timeout)
+                ci_status, ci_feedback = poll_ci_checks(
+                    timeout_seconds=ci_timeout,
+                    poll_interval=ci_poll,
+                )
+                logger.info("CI status: %s", ci_status)
+                if ci_status != "success":
+                    audit = MonitorResult(
+                        decision=MonitorDecision.CI_FAILED,
+                        summary=f"CI checks {ci_status}",
+                        pr_url=audit.pr_url,
+                        ci_status=ci_status,
+                        ci_feedback=ci_feedback,
+                    )
 
         # Write result to branch
         write_monitor_result_to_branch(audit)

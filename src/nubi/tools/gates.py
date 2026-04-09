@@ -60,15 +60,25 @@ def discover_gates(
             return False
         return not (allow_list and category not in allow_list)
 
-    python_discoveries = _discover_python_gates(changed_files, workspace)
-    for disc in python_discoveries:
-        if is_allowed(disc.category):
-            discoveries.append(disc)
+    # Try verification-file-based discovery first (reads AGENTS.md / CLAUDE.md)
+    from nubi.tools.verification_parser import parse_verification_commands, to_gate_discoveries
 
-    node_discoveries = _discover_node_gates(changed_files, workspace)
-    for disc in node_discoveries:
-        if is_allowed(disc.category):
-            discoveries.append(disc)
+    parsed = parse_verification_commands(workspace)
+    if parsed is not None:
+        for disc in to_gate_discoveries(parsed):
+            if is_allowed(disc.category):
+                discoveries.append(disc)
+    else:
+        # Fall back to which-based auto-discovery
+        python_discoveries = _discover_python_gates(changed_files, workspace)
+        for disc in python_discoveries:
+            if is_allowed(disc.category):
+                discoveries.append(disc)
+
+        node_discoveries = _discover_node_gates(changed_files, workspace)
+        for disc in node_discoveries:
+            if is_allowed(disc.category):
+                discoveries.append(disc)
 
     if changed_files and is_allowed(GateCategory.DIFF_SIZE):
         diff_size_disc = _discover_diff_size_gate(changed_files, workspace)
@@ -200,7 +210,11 @@ def _run_single_gate(
     category = discovery.category
     start_time = time.time()
 
-    if category == GateCategory.LINT:
+    # If the discovery has an explicit command (from verification file), use it directly
+    if discovery.command:
+        return _run_command_gate(discovery, workspace, timeout, start_time)
+
+    if category == GateCategory.LINT or category == GateCategory.FORMAT:
         return _run_lint_gate(name, workspace, gate_policy, timeout, start_time)
     elif category == GateCategory.TEST:
         return _run_test_gate(name, workspace, timeout, start_time)
@@ -215,6 +229,60 @@ def _run_single_gate(
             status=GateStatus.SKIPPED,
             output="Unknown gate category",
             duration_seconds=time.time() - start_time,
+        )
+
+
+def _run_command_gate(
+    discovery: GateDiscovery,
+    workspace: str,
+    timeout: int,
+    start_time: float,
+) -> GateResult:
+    """Run a gate using the exact command from the verification file."""
+    cmd = discovery.command
+    name = discovery.name
+    category = discovery.category
+
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+        duration = time.time() - start_time
+        output = _truncate_output(result.stdout + result.stderr)
+
+        status = GateStatus.PASSED if result.returncode == 0 else GateStatus.FAILED
+        return GateResult(
+            name=name,
+            category=category,
+            status=status,
+            output=output,
+            command=cmd,
+            duration_seconds=duration,
+        )
+    except subprocess.TimeoutExpired:
+        return GateResult(
+            name=name,
+            category=category,
+            status=GateStatus.FAILED,
+            output=f"{name} timed out after {timeout}s",
+            command=cmd,
+            duration_seconds=time.time() - start_time,
+            error="timeout",
+        )
+    except Exception as e:
+        return GateResult(
+            name=name,
+            category=category,
+            status=GateStatus.FAILED,
+            output=str(e),
+            command=cmd,
+            duration_seconds=time.time() - start_time,
+            error=str(e),
         )
 
 

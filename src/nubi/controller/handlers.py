@@ -726,8 +726,86 @@ async def on_monitor_completion(
 
     if monitor.pr_url:
         monitor_stage["prURL"] = monitor.pr_url
+    if monitor.ci_status:
+        monitor_stage["ciStatus"] = monitor.ci_status
+    if monitor.ci_feedback:
+        monitor_stage["ciFeedback"] = monitor.ci_feedback[:500]
 
-    # Both approve and flag go to Done (graceful)
+    # CI failure: kick back to executor if retries remain
+    if monitor.decision == "ci-failed":
+        ci_retries = status.get("stages", {}).get("monitor", {}).get("ciRetries", 0)
+        max_ci_retries = task_spec.loop_policy.max_ci_retries
+
+        if ci_retries >= max_ci_retries:
+            patch.status["phase"] = Phase.ESCALATED.value
+            patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+            monitor_stage["ciRetries"] = ci_retries
+            patch.status["stages"] = {**status.get("stages", {}), "monitor": monitor_stage}
+            patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = "processed"
+            logger.warning(
+                "Task %s/%s CI failed after %d retries, escalating",
+                namespace,
+                name,
+                ci_retries,
+            )
+            return
+
+        # Re-spawn executor with CI failure feedback
+        ns_name = status.get("workspace", {}).get("namespace", f"nubi-{name}")
+        ci_feedback = monitor.ci_feedback or monitor.summary
+
+        try:
+            secret_name = await ensure_stage_secret(ns_name, name, "executor")
+        except CredentialError as exc:
+            logger.error("Failed to create executor credentials for CI retry: %s", exc)
+            patch.status["phase"] = Phase.ESCALATED.value
+            patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+            patch.status["stages"] = {**status.get("stages", {}), "monitor": monitor_stage}
+            patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = "processed"
+            return
+
+        prev_attempts = status.get("stages", {}).get("executor", {}).get("attempts", 1)
+        attempt = prev_attempts + 1
+
+        try:
+            executor_job = await create_executor_job(
+                name,
+                ns_name,
+                task_spec,
+                secret_name,
+                namespace,
+                attempt=attempt,
+                reviewer_feedback=f"CI checks failed. Fix the issues:\n\n{ci_feedback}",
+            )
+        except SandboxError as exc:
+            logger.error("Failed to re-create executor job for CI retry: %s", exc)
+            patch.status["phase"] = Phase.ESCALATED.value
+            patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+            patch.status["stages"] = {**status.get("stages", {}), "monitor": monitor_stage}
+            patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = "processed"
+            return
+
+        monitor_stage["ciRetries"] = ci_retries + 1
+        patch.status["phase"] = Phase.EXECUTING.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = {
+            **status.get("stages", {}),
+            "monitor": monitor_stage,
+            "executor": {"status": "running", "attempts": attempt},
+        }
+        patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = ""
+        patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = "processed"
+        logger.info(
+            "Task %s/%s CI failed, re-spawning executor %s (ci_retry %d/%d)",
+            namespace,
+            name,
+            executor_job,
+            ci_retries + 1,
+            max_ci_retries,
+        )
+        return
+
+    # Approve and flag go to Done (graceful)
     patch.status["phase"] = Phase.DONE.value
     patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
     patch.status["stages"] = {**status.get("stages", {}), "monitor": monitor_stage}

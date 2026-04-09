@@ -17,6 +17,7 @@ from nubi.crd.defaults import (
     DEFAULT_DECOMPOSITION_ALLOW,
     DEFAULT_DECOMPOSITION_MAX_DEPTH,
     DEFAULT_DECOMPOSITION_MAX_SUBTASKS,
+    DEFAULT_MAX_CI_RETRIES,
     DEFAULT_MAX_RETRIES,
     DEFAULT_MONITORING_SUMMARY,
     DEFAULT_ON_MAX_RETRIES,
@@ -123,6 +124,7 @@ class LoopPolicy(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     max_retries: int = Field(default=DEFAULT_MAX_RETRIES)
+    max_ci_retries: int = Field(default=DEFAULT_MAX_CI_RETRIES)
     validator_to_executor: bool = Field(default=True)
     reviewer_to_executor: bool = Field(default=True)
     reviewer_to_planner: bool = Field(default=False)
