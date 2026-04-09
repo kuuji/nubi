@@ -1,25 +1,25 @@
 # Nubi — TODO
 
-## Bugs
-- [x] TaskSpec status doesn't persist — PATCH returns 200 but phase stays "Executing" (Fixed: controller annotation patch now uses correct Kubernetes client signature)
-- [x] Live e2e test hangs indefinitely — fixed Job terminal detection to handle non-standard condition ordering (SuccessCriteriaMet, FailureTarget)
-- [x] Remove unnecessary git `.gitconfig` creation — moved safe.directory to container env vars (GIT_CONFIG_COUNT/KEY/VALUE), removed code-level workarounds
-
 ## Done
 - [x] Executor agent — Strands agent with tool filtering, gate loop, git push
 - [x] Deterministic gates — ruff, radon, pytest, diff size, auto-discovery
+- [x] Smart gate discovery — reads AGENTS.md/CLAUDE.md verification section for exact commands
 - [x] Reviewer agent — read-only evaluation, approve/reject with feedback, reviewer→executor retry loop
 - [x] Monitor agent — audits entire workflow, writes PR summary, creates GitHub PR
+- [x] Monitor CI loop — polls GitHub Checks API, kicks back to executor on failure
 - [x] Rich PR summaries — monitor produces narrative description for PRs
 - [x] `.nubi/{task_id}/` namespacing — artifacts don't conflict across merged PRs
-- [x] Controller integration tests — real K8s (k3d), mock LLM (fake agent), mock GitHub API. 8 scenarios
+- [x] Existing branch support — executor checks out existing branches, monitor updates existing PRs
+- [x] Controller integration tests — real K8s (k3d) in CI, 8 scenarios
 - [x] Sandbox hardening — read-only rootfs, shell allowlist, no SA token, storage limits
-- [x] PR output — monitor creates GitHub PRs on approval
+- [x] Gate scoping — lint/complexity only check changed files, tests run everything
+- [x] MCP server — FastMCP with streamable HTTP, 5 tools, K8s client wrapper
+- [x] CI parity — same checks locally and in CI, integration tests with k3d in GitHub Actions
 
 ## Backlog
-- [ ] MCP server — `create_taskspec`, `list_tasks`, `get_task_status`, `get_task_logs` for any agent harness
+- [ ] Context management — executor fills context running diagnostic commands on real projects. Need smarter output handling (truncation, summarization, scoped execution)
+- [ ] Deploy nubi + MCP server — Kustomize manifests, ArgoCD app, service account, ingress for MCP
 - [ ] Planner as MCP skill — interactive task scoping through conversation, then submit via MCP
-- [ ] Per-stage model overrides — infrastructure exists, needs testing with different models per stage
 - [ ] Langfuse integration — tracing, cost tracking, observability
 
 ## Ideas
@@ -28,3 +28,5 @@
 - GitOps integration examples (ArgoCD + TaskSpec)
 - Discord/Slack input channel — submit tasks via chat
 - Kustomize overlays for different environments
+- Integration/e2e test support — standard interface for tasks needing external dependencies (databases, APIs)
+- Comment-driven re-execution — `/nubi fix` on a PR triggers a new executor run with PR comments as feedback
