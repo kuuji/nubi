@@ -12,13 +12,22 @@ from typing import Any
 from kubernetes import client, config
 from kubernetes.client import ApiException
 
+# Module-level config initialization flag
+_config_loaded = False
 
-def _load_config() -> None:
-    """Load Kubernetes config. Uses incluster config first, falls back to kubeconfig."""
-    try:
-        config.load_incluster_config()
-    except config.ConfigException:
-        config.load_kube_config()
+
+def _ensure_config() -> None:
+    """Load Kubernetes config. Uses incluster config first, falls back to kubeconfig.
+
+    This function is idempotent - it only loads config once per module load.
+    """
+    global _config_loaded
+    if not _config_loaded:
+        try:
+            config.load_incluster_config()
+        except config.ConfigException:
+            config.load_kube_config()
+        _config_loaded = True
 
 
 def create_taskspec(name: str, namespace: str, spec: dict) -> dict:
@@ -35,7 +44,7 @@ def create_taskspec(name: str, namespace: str, spec: dict) -> dict:
     Raises:
         ApiException: If the API call fails.
     """
-    _load_config()
+    _ensure_config()
     api = client.CustomObjectsApi()
     body: dict[str, Any] = {
         "apiVersion": "nubi.io/v1",
@@ -65,7 +74,7 @@ def list_taskspecs(namespace: str, phase: str = "") -> list[dict]:
     Raises:
         ApiException: If the API call fails.
     """
-    _load_config()
+    _ensure_config()
     api = client.CustomObjectsApi()
     result = api.list_namespaced_custom_object(
         group="nubi.io",
@@ -92,7 +101,7 @@ def get_taskspec(name: str, namespace: str) -> dict:
     Raises:
         ApiException: If the TaskSpec is not found (404).
     """
-    _load_config()
+    _ensure_config()
     api = client.CustomObjectsApi()
     return api.get_namespaced_custom_object(
         group="nubi.io",
@@ -116,7 +125,7 @@ def delete_taskspec(name: str, namespace: str) -> dict:
     Raises:
         ApiException: If the TaskSpec is not found (404).
     """
-    _load_config()
+    _ensure_config()
     api = client.CustomObjectsApi()
     return api.delete_namespaced_custom_object(
         group="nubi.io",
@@ -141,11 +150,11 @@ def get_pod_logs(name: str, namespace: str, stage: str) -> str:
     Raises:
         ApiException: If no pod is found or logs cannot be retrieved.
     """
-    _load_config()
+    _ensure_config()
     core_api = client.CoreV1Api()
     task_namespace = f"nubi-{name}"
 
-    label_selector = f"nubi.io/stage={stage},nubi.io/taskspec={name}"
+    label_selector = f"nubi.io/stage={stage},nubi.io/task-id={name}"
     pods = core_api.list_namespaced_pod(
         namespace=task_namespace,
         label_selector=label_selector,

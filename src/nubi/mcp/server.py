@@ -57,10 +57,10 @@ def create_taskspec(
     except ValidationError as e:
         errors = []
         for err in e.errors():
-            loc = ".".join(str(l) for l in err["loc"])
+            loc = ".".join(str(part) for part in err["loc"])
             msg = err["msg"]
             errors.append(f"  - {loc}: {msg}")
-        return f"Validation error:\n" + "\n".join(errors)
+        return "Validation error:\n" + "\n".join(errors)
 
     try:
         k8s.create_taskspec(name=name, namespace=namespace, spec=spec)
@@ -121,7 +121,6 @@ def get_task_status(
     except Exception as e:
         return f"Error getting task status: {e}"
 
-    metadata = task.get("metadata", {})
     spec = task.get("spec", {})
     status = task.get("status", {})
     stages = status.get("stages", {})
@@ -170,6 +169,14 @@ def get_task_status(
     lines.append(f"    Status: {reviewer.get('status', 'pending')}")
     lines.append(f"    Decision: {reviewer.get('decision', 'N/A')}")
     lines.append(f"    Feedback: {reviewer.get('feedback', 'N/A')}")
+
+    # Monitor stage
+    monitor = stages.get("monitor", {})
+    lines.append("  Monitor:")
+    lines.append(f"    Status: {monitor.get('status', 'pending')}")
+    lines.append(f"    Decision: {monitor.get('decision', 'N/A')}")
+    lines.append(f"    Summary: {monitor.get('summary', 'N/A')}")
+    lines.append(f"    PR URL: {monitor.get('prURL', 'N/A')}")
 
     # Gating stage
     gating = stages.get("gating", {})
