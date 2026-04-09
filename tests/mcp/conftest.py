@@ -9,41 +9,8 @@ from __future__ import annotations
 import sys
 from unittest.mock import MagicMock
 
-# Set up mocks for external dependencies before any tests run
-# This must happen at import time for pytest
-
-# Mock ApiException class
-class MockApiException(Exception):
-    """Mock for kubernetes.client.ApiException."""
-
-    def __init__(self, status: int | None = None, reason: str | None = None) -> None:
-        self.status = status
-        self.reason = reason
-        super().__init__(f"ApiException({status}): {reason}")
-
-
-# Mock FastMCP class that works as a decorator
-class MockFastMCP:
-    """Mock for mcp.server.fastmcp.FastMCP that supports the @tool() decorator."""
-
-    def __init__(self, name: str, port: int = 8080) -> None:
-        self.name = name
-        self.port = port
-        self._tools: dict = {}
-
-    def tool(self):
-        """Decorator that registers a tool function."""
-
-        def decorator(func):
-            self._tools[func.__name__] = func
-            return func
-
-        return decorator
-
-    def run(self, transport=None):
-        """Mock run method - does nothing."""
-        pass
-
+# Import mock classes from test_fixtures to avoid duplication
+from tests.mcp.test_fixtures import MockApiException, MockFastMCP
 
 # Set up mocks for kubernetes
 sys.modules["kubernetes"] = MagicMock()
