@@ -1,0 +1,43 @@
+{
+  "discovered": [
+    {
+      "name": "radon",
+      "category": "complexity",
+      "applies_to": [
+        "*.py",
+        "src/**/*.py"
+      ],
+      "command": ""
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "applies_to": [
+        "*"
+      ],
+      "command": ""
+    }
+  ],
+  "gates": [
+    {
+      "name": "radon",
+      "category": "complexity",
+      "status": "passed",
+      "output": "{\"/workspace/src/nubi/mcp/k8s.py\": [{\"type\": \"function\", \"rank\": \"A\", \"endline\": 88, \"lineno\": 64, \"name\": \"list_taskspecs\", \"complexity\": 4, \"col_offset\": 0, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"endline\": 30, \"lineno\": 19, \"name\": \"_ensure_config\", \"complexity\": 3, \"col_offset\": 0, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"endline\": 175, \"lineno\": 139, \"name\": \"get_pod_logs\", \"complexity\": 2, \"col_offset\": 0, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"endline\": 60, \"lineno\": 33, \"name\": \"create_taskspec\", \"complexity\": 1, \"col_offset\": 0, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"endline\": 111, \"lineno\": 91, \"name\": \"get_taskspec\", \"complexity\": 1, \"col_offset\": 0, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"endline\": 135, \"lineno\": 115, \"name\": \"delete_taskspec\", \"complexity\": 1, \"col_offset\": 0, \"closures\": []}], \"/workspace/src/nubi/mcp/server.py\": [{\"type\": \"function\", \"rank\": \"A\", \"endline\": 69, \"lineno\": 40, \"name\": \"create_taskspec\", \"complexity\": 5, \"col_offset\": 0, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"endline\": 106, \"lineno\": 73, \"name\": \"list_tasks\", \"complexity\": 4, \"col_offset\": 0, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"endline\": 211, \"lineno\": 192, \"name\": \"get_task_logs\", \"complexity\": 3, \"col_offset\": 0, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"endline\": 33, \"lineno\": 27, \"name\": \"_get_port\", \"complexity\": 2, \"col_offset\": 0, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"endline\": 188, \"lineno\": 110, \"name\": \"get_task_status\", \"complexity\": 2, \"col_offset\": 0, \"closures\": []}, {\"type\": \"function\", \"rank\": \"A\", \"endline\": 224, \"lineno\": 215, \"name\": \"delete_taskspec\", \"complexity\": 2, \"col_offset\": 0, \"closures\": []}]}\n",
+      "command": "radon cc -j /workspace/src/nubi/mcp/k8s.py /workspace/src/nubi/mcp/server.py /workspace/tests/mcp/conftest.py",
+      "duration_seconds": 0.07636761665344238,
+      "error": ""
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "status": "passed",
+      "output": " src/nubi/mcp/k8s.py    | 33 +++++++++++++++++++++------------\n src/nubi/mcp/server.py | 13 ++++++++++---\n tests/mcp/conftest.py  | 37 ++-----------------------------------\n 3 files changed, 33 insertions(+), 50 deletions(-)\n",
+      "command": "git diff --stat origin/nubi/mcp-server-20260409005902..HEAD",
+      "duration_seconds": 0.0020346641540527344,
+      "error": ""
+    }
+  ],
+  "overall_passed": true,
+  "attempt": 1
+}
