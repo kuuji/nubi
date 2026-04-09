@@ -17,8 +17,10 @@
 - [x] CI parity — same checks locally and in CI, integration tests with k3d in GitHub Actions
 
 ## Backlog
-- [ ] Context management — needs more research. Subagent approach (run_check) solved context overflow but lost error detail the executor needs to fix issues, and added latency. Scoped gates (lint/complexity on changed files only) help significantly. Possible directions: smarter truncation, selective subagent use for truly massive output only, or model-level context windowing. Open question.
-- [ ] Deploy nubi + MCP server — MCP Dockerfile, Kustomize base in kuuji/nubi (CRD, controller, MCP server, RBAC, services), then ArgoCD app in gitops repo. Have nubi do this as a dogfood test of non-code infrastructure work.
+- [ ] Context management — needs more research. Subagent approach solved overflow but lost error detail. Scoped gates help. Open question.
+- [x] Deploy manifests — Kustomize base, MCP Dockerfile, split monolithic deployment.yaml (PR #6, done by nubi)
+- [ ] Deploy to gitops-lab — ArgoCD Application pointing to kuuji/nubi/manifests/, cluster-specific secrets + ingress for MCP
+- [ ] Better CI feedback — pass actual check run output to executor on retry, don't retry on timeouts
 - [ ] Planner as MCP skill — interactive task scoping through conversation, then submit via MCP
 - [ ] Langfuse integration — tracing, cost tracking, observability
 
