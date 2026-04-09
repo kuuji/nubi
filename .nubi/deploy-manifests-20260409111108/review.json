@@ -1,6 +1,55 @@
 {
-  "decision": "approve",
-  "feedback": "The implementation correctly sets up production-ready Kustomize manifests for deploying nubi (controller + MCP server). All requirements have been met:\n\n**Completed Items:**\n\n1. **Split manifests/deployment.yaml into individual files under manifests/base/:**\n   - `namespace.yaml` — Namespace resource\n   - `serviceaccount.yaml` — ServiceAccount resource\n   - `rbac.yaml` — ClusterRole + ClusterRoleBinding (combined as allowed for related RBAC resources)\n   - `controller-deployment.yaml` — Controller Deployment only\n   - `runtimeclass.yaml` — gVisor RuntimeClass\n   - Content preserved exactly (only difference is addition of `---` YAML document separators, which is standard for multi-document YAML)\n\n2. **MCP server deployment created:**\n   - `manifests/base/mcp-deployment.yaml` — Deployment with:\n     - Image: ghcr.io/kuuji/nubi-mcp:latest\n     - Command: [\"python\", \"-m\", \"nubi.mcp\"]\n     - Port: 8080\n     - Env var: NUBI_MCP_PORT=8080\n     - ServiceAccount: nubi-controller (reused)\n     - Resources: 128Mi memory, 100m CPU (with matching limits for guaranteed QoS)\n     - 1 replica\n     - Labels: app.kubernetes.io/name=nubi-mcp, app.kubernetes.io/component=mcp-server\n   - `manifests/base/mcp-service.yaml` — ClusterIP Service exposing port 8080\n\n3. **MCP server Dockerfile created at images/mcp/Dockerfile:**\n   - Uses python:3.12-slim base\n   - Installs nubi package via pip\n   - Also installs: mcp, kubernetes\n   - CMD [\"python\", \"-m\", \"nubi.mcp\"]\n   - Runs as non-root user (nubi:1000)\n\n4. **Kustomize base created:**\n   - `manifests/base/kustomization.yaml` includes all resource files plus ../crd.yaml\n\n5. **Old monolithic file deleted:**\n   - `manifests/deployment.yaml` removed\n\n6. **Root-level kustomization.yaml created:**\n   - Points to base directory\n\n**Security Considerations:**\n- All deployments use securityContext with runAsNonRoot, seccompProfile, drop ALL capabilities\n- MCP server runs with readOnlyRootFilesystem and no privilege escalation\n- Dockerfiles create non-root user (UID 1000)\n- No hardcoded secrets found\n\n**Quality:**\n- Consistent labeling with app.kubernetes.io/* labels\n- Resource requests/limits properly set\n- Follows Kubernetes best practices",
-  "summary": "All Kustomize manifest requirements correctly implemented - split files preserve original content, MCP server deployment and Dockerfile created properly, Kustomize structure is correct, and security best practices are followed.",
-  "issues": []
+  "decision": "reject",
+  "feedback": "## Critical Issues Found: Files Have Wrong Content\n\nThe implementation has **severe content corruption** - each file contains the wrong YAML content. This is a fundamental failure where file contents are shuffled across files.\n\n### The Corruption Pattern:\n| File | Contains (WRONG) | Should Contain |\n|------|------------------|----------------|\n| `manifests/base/namespace.yaml` | ServiceAccount + RuntimeClass + Controller Deployment | Namespace |\n| `manifests/base/serviceaccount.yaml` | Namespace | ServiceAccount |\n| `manifests/base/controller-deployment.yaml` | RuntimeClass | Controller Deployment |\n| `manifests/base/runtimeclass.yaml` | MCP Service | RuntimeClass |\n| `manifests/base/mcp-deployment.yaml` | Kustomization + Namespace | MCP Deployment |\n| `manifests/base/mcp-service.yaml` | MCP Deployment + Kustomization | MCP Service |\n| `manifests/base/kustomization.yaml` | Kustomization + root kustomization + Dockerfile | Kustomization |\n| `images/mcp/Dockerfile` | Namespace + MCP Service + 2 Kustomizations | Dockerfile |\n\n### What's Actually in Each File (from git show HEAD):\n\n**namespace.yaml** contains: ServiceAccount → RuntimeClass → Controller Deployment (3 docs)\n**serviceaccount.yaml** contains: Namespace\n**controller-deployment.yaml** contains: RuntimeClass only\n**runtimeclass.yaml** contains: MCP Service only\n**mcp-deployment.yaml** contains: Kustomization + Namespace\n**mcp-service.yaml** contains: MCP Deployment + Kustomization\n**kustomization.yaml** contains: Kustomization + root kustomization + Dockerfile\n**Dockerfile** contains: Namespace + MCP Service + 2 Kustomizations\n\n### What's NOT Done:\n1. ❌ The content from original `deployment.yaml` is NOT properly split\n2. ❌ The new MCP deployment/service content is NOT in correct files\n3. ❌ The Kustomize build structure is broken\n\n### What IS Correct:\n- ✅ `manifests/base/rbac.yaml` - Contains ClusterRole + ClusterRoleBinding (correct!)\n- ✅ `manifests/crd.yaml` - Unchanged (correct!)\n- ✅ `manifests/deployment.yaml` - Deleted (correct!)\n\n### Root Cause:\nIt appears content was accidentally written to wrong files during creation. The correct content exists but is scattered across wrong files.\n\n### Required Fix:\nEach file needs its content corrected to match what the task specification requires. The files need to be rewritten with the correct content as specified in the task description.",
+  "summary": "All split manifest files contain wrong content - file contents are shuffled/corrupted, with each file holding the wrong YAML document(s) instead of its intended content.",
+  "issues": [
+    {
+      "severity": "critical",
+      "file": "manifests/base/namespace.yaml",
+      "line": null,
+      "description": "Contains ServiceAccount + RuntimeClass + Controller Deployment instead of Namespace"
+    },
+    {
+      "severity": "critical",
+      "file": "manifests/base/serviceaccount.yaml",
+      "line": null,
+      "description": "Contains Namespace instead of ServiceAccount"
+    },
+    {
+      "severity": "critical",
+      "file": "manifests/base/controller-deployment.yaml",
+      "line": null,
+      "description": "Contains RuntimeClass instead of Controller Deployment"
+    },
+    {
+      "severity": "critical",
+      "file": "manifests/base/runtimeclass.yaml",
+      "line": null,
+      "description": "Contains MCP Service instead of RuntimeClass"
+    },
+    {
+      "severity": "critical",
+      "file": "manifests/base/mcp-deployment.yaml",
+      "line": null,
+      "description": "Contains Kustomization + Namespace instead of MCP Deployment"
+    },
+    {
+      "severity": "critical",
+      "file": "manifests/base/mcp-service.yaml",
+      "line": null,
+      "description": "Contains MCP Deployment + Kustomization instead of MCP Service"
+    },
+    {
+      "severity": "critical",
+      "file": "manifests/base/kustomization.yaml",
+      "line": null,
+      "description": "Contains Kustomization + root kustomization + Dockerfile instead of Kustomization"
+    },
+    {
+      "severity": "critical",
+      "file": "images/mcp/Dockerfile",
+      "line": null,
+      "description": "Contains Namespace + MCP Service + Kustomizations instead of Dockerfile"
+    }
+  ]
 }
