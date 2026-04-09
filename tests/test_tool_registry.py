@@ -12,7 +12,7 @@ class TestToolGroups:
 
     def test_check_group(self) -> None:
         assert "check" in TOOL_GROUPS
-        assert len(TOOL_GROUPS["check"]) == 1
+        assert len(TOOL_GROUPS["check"]) == 2
 
     def test_git_group(self) -> None:
         assert "git" in TOOL_GROUPS
