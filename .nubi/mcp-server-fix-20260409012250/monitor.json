@@ -1,0 +1,7 @@
+{
+  "decision": "approve",
+  "summary": "All 8 requested fixes correctly implemented with all gates passing. Changes are targeted, minimal, and maintain code quality.",
+  "pr_summary": "## MCP Server Polish Pass\n\n**What changed**: Applied 8 targeted fixes to MCP server code without rewriting any files.\n\n**Key fixes implemented**:\n- Lint fixes in `server.py`: renamed ambiguous variable `l` → `part`, removed unnecessary f-string prefix, removed unused metadata assignment\n- Bug fix in `k8s.py`: corrected label selector from `nubi.io/taskspec={name}` to `nubi.io/task-id={name}` to match actual K8s Job labels\n- Added missing Monitor stage output in `get_task_status()` with Status, Decision, Summary, and PR URL fields\n- Deduplicated mock classes (`MockApiException`, `MockFastMCP`) in `conftest.py` — now imported from `test_fixtures.py`\n- Optimized config loading in `k8s.py`: refactored `_load_config()` to idempotent `_ensure_config()` with module-level flag\n\n**Validation**: All gates passed (complexity radon, diff_size). Reviewer approved all 8 items. Only 3 source files modified with net -17 lines of code.\n\n**Scope**: 3 files changed (src/nubi/mcp/k8s.py, src/nubi/mcp/server.py, tests/mcp/conftest.py). No unrelated modifications.",
+  "concerns": [],
+  "pr_url": "https://github.com/kuuji/nubi/pull/5"
+}
