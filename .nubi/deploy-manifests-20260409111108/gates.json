@@ -40,7 +40,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.00007510185241699219,
+      "duration_seconds": 0.00008273124694824219,
       "error": ""
     },
     {
@@ -49,7 +49,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.00005078315734863281,
+      "duration_seconds": 0.00005054473876953125,
       "error": ""
     },
     {
@@ -58,7 +58,7 @@
       "status": "skipped",
       "output": "mypy not found in PATH",
       "command": "",
-      "duration_seconds": 0.00007843971252441406,
+      "duration_seconds": 0.00006127357482910156,
       "error": ""
     },
     {
@@ -67,16 +67,16 @@
       "status": "skipped",
       "output": "pytest not found in PATH",
       "command": "",
-      "duration_seconds": 0.00006246566772460938,
+      "duration_seconds": 0.000058650970458984375,
       "error": ""
     },
     {
       "name": "diff_size",
       "category": "diff_size",
       "status": "passed",
-      "output": " images/mcp/Dockerfile                     |  28 ++++++\n manifests/base/controller-deployment.yaml |  70 ++++++++++++++\n manifests/base/kustomization.yaml         |  14 +++\n manifests/base/mcp-deployment.yaml        |  60 ++++++++++++\n manifests/base/mcp-service.yaml           |  20 ++++\n manifests/base/namespace.yaml             |   7 ++\n manifests/base/rbac.yaml                  |  61 ++++++++++++\n manifests/base/runtimeclass.yaml          |   7 ++\n manifests/base/serviceaccount.yaml        |   6 ++\n manifests/deployment.yaml                 | 151 ------------------------------\n manifests/kustomization.yaml              |   5 +\n 11 files changed, 278 insertions(+), 151 deletions(-)\n",
+      "output": " .nubi/deploy-manifests-20260409111108/gates.json   |  85 ++++++++++++\n .nubi/deploy-manifests-20260409111108/monitor.json |   9 ++\n .nubi/deploy-manifests-20260409111108/result.json  |  19 +++\n .nubi/deploy-manifests-20260409111108/review.json  |   6 +\n images/mcp/Dockerfile                              |  28 ++++\n manifests/base/controller-deployment.yaml          |  70 ++++++++++\n manifests/base/kustomization.yaml                  |  14 ++\n manifests/base/mcp-deployment.yaml                 |  60 ++++++++\n manifests/base/mcp-service.yaml                    |  20 +++\n manifests/base/namespace.yaml                      |   7 +\n manifests/base/rbac.yaml                           |  61 +++++++++\n manifests/base/runtimeclass.yaml                   |   7 +\n manifests/base/serviceaccount.yaml                 |   6 +\n manifests/deployment.yaml                          | 151 ---------------------\n manifests/kustomization.yaml                       |   5 +\n 15 files changed, 397 insertions(+), 151 deletions(-)\n",
       "command": "git diff --stat origin/main..HEAD",
-      "duration_seconds": 0.00403904914855957,
+      "duration_seconds": 0.0038061141967773438,
       "error": ""
     }
   ],
