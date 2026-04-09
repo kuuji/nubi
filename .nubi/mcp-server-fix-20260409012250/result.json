@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "commit_sha": "7a57b251b668da749bd9c512e76218b1aa3e7401",
+  "summary": "Task completed with all gates passing",
+  "files_changed": [
+    "src/nubi/mcp/k8s.py",
+    "src/nubi/mcp/server.py",
+    "tests/mcp/conftest.py"
+  ],
+  "error": ""
+}
