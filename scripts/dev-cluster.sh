@@ -27,8 +27,8 @@ cmd_up() {
     info "Applying CRD..."
     kubectl apply -f manifests/crd.yaml --context "k3d-${CLUSTER_NAME}"
 
-    info "Applying RBAC from deployment manifest..."
-    kubectl apply -f manifests/deployment.yaml --context "k3d-${CLUSTER_NAME}"
+    info "Applying manifests..."
+    kubectl apply -k manifests/ --context "k3d-${CLUSTER_NAME}"
     # Remove the Deployment (we run kopf locally) and RuntimeClass (no gVisor in k3d)
     kubectl delete deployment nubi-controller -n nubi-system --ignore-not-found --context "k3d-${CLUSTER_NAME}"
     kubectl delete runtimeclass gvisor --ignore-not-found --context "k3d-${CLUSTER_NAME}"
