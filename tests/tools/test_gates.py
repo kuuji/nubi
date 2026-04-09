@@ -371,7 +371,11 @@ class TestRunSingleGate:
         from nubi.tools.gates import _run_single_gate
 
         mock_which.return_value = "/usr/bin/ruff"
-        mock_subprocess.return_value = MagicMock(returncode=0, stdout="No issues found", stderr="")
+        # First call: git diff --name-only; Second call: ruff check
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="foo.py\n", stderr=""),
+            MagicMock(returncode=0, stdout="No issues found", stderr=""),
+        ]
 
         discovery = GateDiscovery(
             name="ruff", category=GateCategory.LINT, command="ruff check /workspace"
@@ -387,7 +391,11 @@ class TestRunSingleGate:
         from nubi.tools.gates import _run_single_gate
 
         mock_which.return_value = "/usr/bin/ruff"
-        mock_subprocess.return_value = MagicMock(returncode=1, stdout="Errors found", stderr="")
+        # First call: git diff --name-only; Second call: ruff check
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="foo.py\n", stderr=""),
+            MagicMock(returncode=1, stdout="Errors found", stderr=""),
+        ]
 
         discovery = GateDiscovery(
             name="ruff", category=GateCategory.LINT, command="ruff check /workspace"
@@ -418,11 +426,15 @@ class TestRunSingleGate:
 
         from nubi.tools.gates import _run_single_gate
 
-        mock_which.return_value = "/usr/bin/slow_tool"
-        mock_subprocess.side_effect = subprocess.TimeoutExpired("slow_tool", timeout=300)
+        mock_which.return_value = "/usr/bin/ruff"
+        # First call: git diff --name-only; Second call: timeout
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="foo.py\n", stderr=""),
+            subprocess.TimeoutExpired("ruff", timeout=300),
+        ]
 
         discovery = GateDiscovery(
-            name="slow_tool", category=GateCategory.LINT, command="slow_tool /workspace"
+            name="ruff", category=GateCategory.LINT, command="ruff check /workspace"
         )
         result = _run_single_gate(discovery, "/workspace", GatePolicy(), timeout=300)
 

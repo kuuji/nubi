@@ -201,7 +201,7 @@ def _run_single_gate(
     start_time = time.time()
 
     if category == GateCategory.LINT:
-        return _run_lint_gate(name, workspace, timeout, start_time)
+        return _run_lint_gate(name, workspace, gate_policy, timeout, start_time)
     elif category == GateCategory.TEST:
         return _run_test_gate(name, workspace, timeout, start_time)
     elif category == GateCategory.COMPLEXITY:
@@ -218,8 +218,10 @@ def _run_single_gate(
         )
 
 
-def _run_lint_gate(name: str, workspace: str, timeout: int, start_time: float) -> GateResult:
-    """Run a lint gate (ruff, eslint)."""
+def _run_lint_gate(
+    name: str, workspace: str, gate_policy: GatePolicy, timeout: int, start_time: float
+) -> GateResult:
+    """Run a lint gate (ruff, eslint) scoped to changed files only."""
     if not which(name):
         return GateResult(
             name=name,
@@ -229,10 +231,37 @@ def _run_lint_gate(name: str, workspace: str, timeout: int, start_time: float) -
             duration_seconds=time.time() - start_time,
         )
 
+    # Only lint changed files, not the entire workspace
+    diff_result = subprocess.run(
+        ["git", "diff", "--name-only", f"origin/{gate_policy.base_branch}..HEAD"],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+    )
+
     if name == "ruff":
-        cmd = f"ruff check {workspace} --output-format=concise"
+        changed = [f for f in diff_result.stdout.strip().splitlines() if f.endswith(".py")]
     else:
-        cmd = f"{name} {workspace}"
+        changed = [
+            f
+            for f in diff_result.stdout.strip().splitlines()
+            if f.endswith((".js", ".ts", ".jsx", ".tsx"))
+        ]
+
+    if not changed:
+        return GateResult(
+            name=name,
+            category=GateCategory.LINT,
+            status=GateStatus.PASSED,
+            output="No changed files to lint",
+            duration_seconds=time.time() - start_time,
+        )
+
+    file_args = " ".join(f"{workspace}/{f}" for f in changed)
+    if name == "ruff":
+        cmd = f"ruff check {file_args} --output-format=concise"
+    else:
+        cmd = f"{name} {file_args}"
 
     try:
         result = subprocess.run(
