@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import MagicMock, patch
 
 ENV_VARS = {
@@ -32,6 +33,7 @@ class TestMain:
         mock_agent_factory: MagicMock,
         mock_subprocess: MagicMock,
     ) -> None:
+        os.makedirs("/tmp/test-workspace", exist_ok=True)
         mock_agent = MagicMock()
         mock_agent.return_value = "Done"
         mock_agent_factory.return_value = mock_agent
@@ -99,6 +101,7 @@ class TestMain:
         mock_agent_factory: MagicMock,
         mock_subprocess: MagicMock,
     ) -> None:
+        os.makedirs("/tmp/test-workspace", exist_ok=True)
         mock_agent = MagicMock()
         mock_agent.return_value = "summary text"
         mock_agent_factory.return_value = mock_agent

@@ -437,11 +437,15 @@ class TestRunSingleGate:
         from nubi.tools.gates import _run_single_gate
 
         mock_which.return_value = "/usr/bin/radon"
-        mock_subprocess.return_value = MagicMock(
-            returncode=0,
-            stdout='{"foo.py": [{"name": "foo", "complexity": 5}]}',
-            stderr="",
-        )
+        # First call: git diff --name-only; Second call: radon cc -j
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="foo.py\n", stderr=""),
+            MagicMock(
+                returncode=0,
+                stdout='{"foo.py": [{"name": "foo", "complexity": 5}]}',
+                stderr="",
+            ),
+        ]
 
         discovery = GateDiscovery(
             name="radon",
@@ -460,11 +464,15 @@ class TestRunSingleGate:
         from nubi.tools.gates import _run_single_gate
 
         mock_which.return_value = "/usr/bin/radon"
-        mock_subprocess.return_value = MagicMock(
-            returncode=0,
-            stdout='{"foo.py": [{"name": "complex_func", "complexity": 15}]}',
-            stderr="",
-        )
+        # First call: git diff --name-only; Second call: radon cc -j
+        mock_subprocess.side_effect = [
+            MagicMock(returncode=0, stdout="foo.py\n", stderr=""),
+            MagicMock(
+                returncode=0,
+                stdout='{"foo.py": [{"name": "complex_func", "complexity": 15}]}',
+                stderr="",
+            ),
+        ]
 
         discovery = GateDiscovery(
             name="radon",

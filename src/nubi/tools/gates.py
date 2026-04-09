@@ -365,7 +365,26 @@ def _run_complexity_gate(
         )
 
     max_cc = gate_policy.thresholds.max_cc
-    cmd = f"radon cc -j {workspace}"
+
+    # Only scan changed Python files, not the entire workspace
+    diff_result = subprocess.run(
+        ["git", "diff", "--name-only", f"origin/{gate_policy.base_branch}..HEAD"],
+        cwd=workspace,
+        capture_output=True,
+        text=True,
+    )
+    changed_py = [f for f in diff_result.stdout.strip().splitlines() if f.endswith(".py")]
+    if not changed_py:
+        return GateResult(
+            name=name,
+            category=GateCategory.COMPLEXITY,
+            status=GateStatus.PASSED,
+            output="No changed Python files to check",
+            duration_seconds=time.time() - start_time,
+        )
+
+    file_args = " ".join(f"{workspace}/{f}" for f in changed_py)
+    cmd = f"radon cc -j {file_args}"
 
     try:
         result = subprocess.run(

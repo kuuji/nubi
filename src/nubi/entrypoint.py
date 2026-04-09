@@ -191,7 +191,7 @@ def main() -> int:
         gitignore_path = os.path.join(workspace, ".gitignore")
         if not os.path.exists(gitignore_path):
             with open(gitignore_path, "w") as f:
-                f.write(".cache/\n__pycache__/\n*.pyc\n")
+                f.write(".cache/\n.local/\n__pycache__/\n*.pyc\n.venv/\n")
 
         subprocess.run(
             ["git", "checkout", "-b", task_branch],
