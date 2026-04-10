@@ -1,105 +1,97 @@
 # Nubi
 
-A Kubernetes-native controller that orchestrates AI agent workflows. Define a task as a CRD, and Nubi runs a sandboxed pipeline of code generation, deterministic validation, agentic review, and PR creation — all inside your cluster.
+A Kubernetes-native controller that orchestrates AI agent workflows. Describe what you want to an AI assistant, and Nubi turns it into a sandboxed pipeline of code generation, deterministic validation, agentic review, and PR creation — all inside your cluster.
 
 ## How It Works
 
-You apply a `TaskSpec` custom resource. The controller takes it from there:
+You describe a task to your AI assistant (Claude Code, Claude Desktop, or any MCP client). The MCP server translates your request into a `TaskSpec` CRD and applies it. From there, the controller runs the full pipeline autonomously:
 
 ```
-                         ┌─────────────────────────────────┐
-                         │     kubectl apply taskspec.yaml  │
-                         └────────────────┬────────────────┘
-                                          │
-                                          ▼
-                         ┌─────────────────────────────────┐
-                         │          Controller              │
-                         │  (kopf operator in nubi-system)  │
-                         │                                  │
-                         │  Creates:                        │
-                         │  - Task namespace                │
-                         │  - NetworkPolicy (deny-all +     │
-                         │    scoped egress)                │
-                         │  - ResourceQuota                 │
-                         │  - Scoped credentials Secret     │
-                         └────────────────┬────────────────┘
-                                          │
-                    ┌─────────────────────┐│┌─────────────────────┐
-                    │   gVisor Sandbox    │││   Git Branch        │
-                    │   (RuntimeClass)    │││   nubi/{task-id}    │
-                    └─────────────────────┘│└─────────────────────┘
-                                          │
-              ┌───────────────────────────┐│
-              │                           ▼│
-              │            ┌──────────────────────────┐
-              │            │    1. Executor Agent      │
-              │            │    (Strands SDK)          │
-              │            │                           │
-              │            │  - Clones branch          │
-              │            │  - Writes code + tests    │
-              │            │  - Pushes to git          │
-              │            └────────────┬─────────────┘
-              │                         │
-              │                         ▼
-              │            ┌──────────────────────────┐
-              │  ┌─fail──  │    2. Deterministic Gates │
-              │  │         │    (not an LLM call)      │
-              │  │         │                           │
-              │  │         │  - Lint (ruff/eslint)     │
-              │  │         │  - Complexity (radon)     │
-              │  │         │  - Tests (pytest/jest)    │
-              │  │         │  - Diff size check        │
-              │  │         └────────────┬─────────────┘
-              │  │                      │ pass
-              │  │  retry w/ feedback   │
-              │  └──────────────────────│─────────────────┐
-              │                         ▼                  │
-              │            ┌──────────────────────────┐    │
-              │            │    3. Reviewer Agent      │    │
-              │            │    (read-only)            │    │
-              │  ┌─changes─│                           │    │
-              │  │         │  - Code quality           │    │
-              │  │         │  - Architecture fit       │    │
-              │  │         │  - Security review        │    │
-              │  │         │  - Test coverage          │    │
-              │  │         └────────────┬─────────────┘    │
-              │  │                      │ approve          │
-              │  │  retry w/ feedback   │                  │
-              │  └──────────────────────│                  │
-              │                         ▼                  │
-              │            ┌──────────────────────────┐    │
-              │            │    4. Monitor Agent       │    │
-              │            │                           │    │
-              │            │  - Audits full pipeline   │    │
-              │            │  - Writes PR summary      │    │
-              │            │  - Creates GitHub PR      │    │
-              │            └────────────┬─────────────┘    │
-              │                         │                  │
-              │                         ▼                  │
-              │            ┌──────────────────────────┐    │
-              │            │         Done              │    │
-              │            │   PR on target repo       │    │
-              │            └──────────────────────────┘    │
-              │                                            │
-              │  All retry loops are bounded by             │
-              │  spec.loop_policy.max_retries               │
-              │  Exceeding limit → escalate to human        │
-              └────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────┐
+ │  Human ──► AI Assistant (Claude Code / Desktop / MCP client)    │
+ │                │                                                │
+ │                ▼                                                │
+ │        MCP Server ──► kubectl apply TaskSpec                    │
+ └──────────────────────────────┬───────────────────────────────────┘
+                                │
+                                ▼
+                ┌───────────────────────────────┐
+                │         Controller             │
+                │   (kopf operator, nubi-system)  │
+                │                                │
+                │  Creates:                      │
+                │  - Task namespace              │
+                │  - NetworkPolicy + ResourceQuota│
+                │  - Scoped credentials Secret   │
+                │  - Git branch nubi/{task-id}   │
+                └───────────────┬───────────────┘
+                                │
+          All stages run in gVisor-sandboxed pods
+                                │
+                                ▼
+               ┌────────────────────────────────┐
+          ┌───►│    1. Executor Agent            │
+          │    │       (Strands SDK)             │
+          │    │                                 │
+          │    │    Clones branch, writes code   │
+          │    │    + tests, pushes to git       │
+          │    └───────────────┬────────────────┘
+          │                    │
+          │                    ▼
+          │    ┌────────────────────────────────┐
+          │    │    2. Deterministic Gates       │
+          │    │       (not an LLM call)         │
+          │    │                                 │
+          │    │    Lint · Tests · Complexity    │
+          │    │    Diff size                    │
+          │    └──────┬────────────┬────────────┘
+          │           │            │
+          │      fail │            │ pass
+          │  (w/ feedback)         │
+          └───────────┘            ▼
+                       ┌────────────────────────────────┐
+          ┌───────────►│    3. Reviewer Agent            │
+          │            │       (read-only)               │
+          │            │                                 │
+          │            │    Code quality · Security      │
+          │            │    Architecture · Test coverage  │
+          │            └──────┬────────────┬────────────┘
+          │                   │            │
+          │   request-changes │            │ approve
+          │    (w/ feedback)  │            │
+          └───────────────────┘            ▼
+                       ┌────────────────────────────────┐
+                       │    4. Monitor Agent             │
+                       │                                 │
+                       │    Audits full pipeline          │
+                       │    Writes PR summary            │
+                       │    Creates GitHub PR            │
+                       └───────────────┬────────────────┘
+                                       │
+                                       ▼
+                       ┌────────────────────────────────┐
+                       │            Done                 │
+                       │      PR on target repo          │
+                       └────────────────────────────────┘
+
+  All retry loops are bounded by spec.loop_policy.max_retries
+  Exceeding limit → escalate to human
 ```
 
 Each agent runs as a Kubernetes Job in a gVisor-sandboxed pod with scoped credentials, restricted networking, and resource limits. Git branches are the shared workspace — no PVCs, no shared volumes, no pod-to-pod communication.
 
+You can also apply TaskSpecs directly with `kubectl` or through GitOps (ArgoCD).
+
 ## Features
 
-- **Declarative tasks** — define what you want as a `TaskSpec` CRD, apply with `kubectl`
+- **Conversational input via MCP** — describe tasks to Claude Code, Claude Desktop, or any MCP-compatible assistant; the MCP server creates the TaskSpec for you
 - **Sandboxed execution** — gVisor runtime, restricted Pod Security Standards, deny-all NetworkPolicy, no K8s API access from agent pods
 - **Deterministic gates** — lint, test, complexity checks run as code, not LLM calls
 - **Agentic review** — a separate read-only agent evaluates the executor's work
 - **Bounded retry loops** — gate failures and review feedback loop back to the executor, with configurable limits and escalation
 - **Git-native workspace** — each task gets a branch; artifacts live in `.nubi/{task-id}/`; the audit trail is the commit history
 - **Model-agnostic** — works with any OpenAI-compatible API (OpenRouter, Anthropic, local models via ollama)
-- **MCP server** — expose Nubi as tools for Claude Code, Claude Desktop, or any MCP client
-- **GitOps-ready** — commit TaskSpec YAMLs to a repo, let ArgoCD apply them
+- **Also works with kubectl and GitOps** — apply TaskSpec YAMLs directly, or commit them to a repo and let ArgoCD handle it
 
 ## Quick Start
 
