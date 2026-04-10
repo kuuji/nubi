@@ -7,36 +7,24 @@ A Kubernetes-native controller that orchestrates AI agent workflows. Describe wh
 You describe a task to your AI assistant (Claude Code, Claude Desktop, or any MCP client). The MCP server translates your request into a `TaskSpec` CRD and applies it. From there, the controller runs the full pipeline autonomously:
 
 ```mermaid
-flowchart TD
-    Human["Human"] -->|describes task| Assistant["AI Assistant\n(Claude Code / Desktop / MCP client)"]
-    Assistant -->|creates TaskSpec via MCP| Controller
+flowchart LR
+    Human(("You")) --> Assistant["AI Assistant<br/>(MCP client)"]
+    Assistant -- "TaskSpec<br/>via MCP" --> Controller
 
-    subgraph Cluster ["Kubernetes Cluster"]
-        Controller["Controller\n(kopf operator)"]
-        Controller -->|"creates namespace, credentials,\nNetworkPolicy, git branch"| Executor
-
-        subgraph Sandbox ["gVisor-sandboxed pods"]
-            Executor["Executor Agent\nWrites code + tests\nRuns deterministic gates\n(lint · tests · complexity)"]
-            Executor -->|gates pass| Reviewer
-
-            Reviewer["Reviewer Agent\n(read-only)\nCode quality · Security\nArchitecture · Test coverage"]
-            Reviewer -->|approve| Monitor
-
-            Monitor["Monitor Agent\nAudits pipeline · Creates PR\nPolls CI checks"]
-        end
-
-        Executor -->|"gates fail — retry w/ feedback"| Executor
-        Reviewer -->|"request-changes — w/ feedback"| Executor
-        Monitor -->|"CI fails — w/ feedback"| Executor
+    subgraph K8s ["Kubernetes · gVisor sandbox"]
+        direction LR
+        Controller["Controller"] --> Executor
+        Executor["Executor<br/>code + tests + gates"] -- pass --> Reviewer
+        Reviewer["Reviewer<br/>(read-only)"] -- approve --> Monitor
+        Monitor["Monitor<br/>PR + CI checks"]
     end
 
-    Monitor -->|approve| Done["Done\nPR on target repo"]
-    Reviewer -->|reject| Escalate["Escalate to human"]
+    Executor -- "gates fail" --> Executor
+    Reviewer -- "changes requested" --> Executor
+    Monitor -- "CI failed" --> Executor
 
-    style Sandbox fill:#f8f9fa,stroke:#495057
-    style Cluster fill:#fff,stroke:#dee2e6
-    style Done fill:#d4edda,stroke:#28a745
-    style Escalate fill:#fff3cd,stroke:#ffc107
+    Monitor -- approve --> Done(["PR created"])
+    Reviewer -- reject --> Escalate(["Escalate"])
 ```
 
 Each agent runs as a Kubernetes Job in a gVisor-sandboxed pod with scoped credentials, restricted networking, and resource limits. Git branches are the shared workspace — no PVCs, no shared volumes, no pod-to-pod communication.
