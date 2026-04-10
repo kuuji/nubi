@@ -1,6 +1,6 @@
 # Nubi — Architecture
 
-**Nubi** (누비) — Korean quilting art. Layers stitched together into something stronger than the individual pieces.
+**Nubi** — layers stitched together into something stronger than the individual pieces.
 
 An agentic harness for orchestrating AI agent workflows on Kubernetes. Structured task specs in, sandboxed execution, layered validation, and observable results out.
 
