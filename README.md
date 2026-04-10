@@ -7,24 +7,24 @@ A Kubernetes-native controller that orchestrates AI agent workflows. Describe wh
 You describe a task to your AI assistant (Claude Code, Claude Desktop, or any MCP client). The MCP server translates your request into a `TaskSpec` CRD and applies it. From there, the controller runs the full pipeline autonomously:
 
 ```mermaid
-flowchart LR
-    Human(("You")) --> Assistant["AI Assistant<br/>(MCP client)"]
-    Assistant -- "TaskSpec<br/>via MCP" --> Controller
+flowchart TD
+    You(("You")) --> Assistant["AI Assistant (MCP client)"]
+    Assistant -- TaskSpec --> Controller["Controller"]
 
-    subgraph K8s ["Kubernetes · gVisor sandbox"]
-        direction LR
-        Controller["Controller"] --> Executor
-        Executor["Executor<br/>code + tests + gates"] -- pass --> Reviewer
-        Reviewer["Reviewer<br/>(read-only)"] -- approve --> Monitor
-        Monitor["Monitor<br/>PR + CI checks"]
+    Controller --> Executor
+
+    subgraph Pipeline ["gVisor-sandboxed Kubernetes pods"]
+        Executor["Executor · code + tests + gates"]
+        Executor -- pass --> Reviewer["Reviewer · read-only"]
+        Reviewer -- approve --> Monitor["Monitor · PR + CI"]
     end
 
-    Executor -- "gates fail" --> Executor
-    Reviewer -- "changes requested" --> Executor
-    Monitor -- "CI failed" --> Executor
+    Executor -. "gates fail" .-> Executor
+    Reviewer -. "request changes" .-> Executor
+    Monitor -. "CI failed" .-> Executor
 
     Monitor -- approve --> Done(["PR created"])
-    Reviewer -- reject --> Escalate(["Escalate"])
+    Reviewer -. reject .-> Escalate(["Escalate to human"])
 ```
 
 Each agent runs as a Kubernetes Job in a gVisor-sandboxed pod with scoped credentials, restricted networking, and resource limits. Git branches are the shared workspace — no PVCs, no shared volumes, no pod-to-pod communication.
