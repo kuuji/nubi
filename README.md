@@ -7,25 +7,20 @@ A Kubernetes-native controller that orchestrates AI agent workflows. Describe wh
 You describe a task to your AI assistant (Claude Code, Claude Desktop, or any MCP client). The MCP server translates your request into a `TaskSpec` CRD and applies it. From there, the controller runs the full pipeline autonomously:
 
 ```mermaid
-flowchart TD
-    You(("You")) --> Assistant["AI Assistant (MCP client)"]
-    Assistant -- TaskSpec --> Controller["Controller"]
-
-    Controller --> Executor
-
-    subgraph Pipeline ["gVisor-sandboxed Kubernetes pods"]
-        Executor["Executor · code + tests + gates"]
-        Executor -- pass --> Reviewer["Reviewer · read-only"]
-        Reviewer -- approve --> Monitor["Monitor · PR + CI"]
-    end
-
-    Executor -. "gates fail" .-> Executor
-    Reviewer -. "request changes" .-> Executor
-    Monitor -. "CI failed" .-> Executor
-
-    Monitor -- approve --> Done(["PR created"])
-    Reviewer -. reject .-> Escalate(["Escalate to human"])
+flowchart LR
+    You(("You"))
+    You --> A["AI Assistant\n(MCP client)"]
+    A --> C["Controller"]
+    C --> E["Executor\ncode + tests\n+ gates"]
+    E --> R["Reviewer\n(read-only)"]
+    R --> M["Monitor\nPR + CI"]
+    M --> D(["PR created"])
 ```
+
+> **Feedback loops** — all bounded by `max_retries`, then escalate to human:
+> - Gates fail → executor retries with error output
+> - Reviewer requests changes → executor retries with feedback
+> - CI fails after PR → executor retries with CI output
 
 Each agent runs as a Kubernetes Job in a gVisor-sandboxed pod with scoped credentials, restricted networking, and resource limits. Git branches are the shared workspace — no PVCs, no shared volumes, no pod-to-pod communication.
 
