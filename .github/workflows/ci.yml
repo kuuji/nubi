@@ -113,13 +113,19 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Compute image tag
+        id: meta
+        run: echo "sha_tag=sha-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Build and push controller image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: images/controller/Dockerfile
           push: true
-          tags: ghcr.io/kuuji/nubi-controller:latest
+          tags: |
+            ghcr.io/kuuji/nubi-controller:latest
+            ghcr.io/kuuji/nubi-controller:${{ steps.meta.outputs.sha_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -129,6 +135,20 @@ jobs:
           context: .
           file: images/agent/Dockerfile
           push: true
-          tags: ghcr.io/kuuji/nubi-agent:latest
+          tags: |
+            ghcr.io/kuuji/nubi-agent:latest
+            ghcr.io/kuuji/nubi-agent:${{ steps.meta.outputs.sha_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push MCP image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: images/mcp/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/kuuji/nubi-mcp:latest
+            ghcr.io/kuuji/nubi-mcp:${{ steps.meta.outputs.sha_tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
