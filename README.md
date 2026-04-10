@@ -6,76 +6,37 @@ A Kubernetes-native controller that orchestrates AI agent workflows. Describe wh
 
 You describe a task to your AI assistant (Claude Code, Claude Desktop, or any MCP client). The MCP server translates your request into a `TaskSpec` CRD and applies it. From there, the controller runs the full pipeline autonomously:
 
-```
- ┌──────────────────────────────────────────────────────────────────┐
- │  Human ──► AI Assistant (Claude Code / Desktop / MCP client)    │
- │                │                                                │
- │                ▼                                                │
- │        MCP Server ──► kubectl apply TaskSpec                    │
- └──────────────────────────────┬───────────────────────────────────┘
-                                │
-                                ▼
-                ┌───────────────────────────────┐
-                │         Controller             │
-                │   (kopf operator, nubi-system)  │
-                │                                │
-                │  Creates:                      │
-                │  - Task namespace              │
-                │  - NetworkPolicy + ResourceQuota│
-                │  - Scoped credentials Secret   │
-                │  - Git branch nubi/{task-id}   │
-                └───────────────┬───────────────┘
-                                │
-          All stages run in gVisor-sandboxed pods
-                                │
-                                ▼
-               ┌────────────────────────────────┐
-          ┌───►│    1. Executor Agent            │
-          │    │       (Strands SDK)             │
-          │    │                                 │
-          │    │    Clones branch, writes code   │
-          │    │    + tests, pushes to git       │
-          │    └───────────────┬────────────────┘
-          │                    │
-          │                    ▼
-          │    ┌────────────────────────────────┐
-          │    │    2. Deterministic Gates       │
-          │    │       (not an LLM call)         │
-          │    │                                 │
-          │    │    Lint · Tests · Complexity    │
-          │    │    Diff size                    │
-          │    └──────┬────────────┬────────────┘
-          │           │            │
-          │      fail │            │ pass
-          │  (w/ feedback)         │
-          └───────────┘            ▼
-                       ┌────────────────────────────────┐
-          ┌───────────►│    3. Reviewer Agent            │
-          │            │       (read-only)               │
-          │            │                                 │
-          │            │    Code quality · Security      │
-          │            │    Architecture · Test coverage  │
-          │            └──────┬────────────┬────────────┘
-          │                   │            │
-          │   request-changes │            │ approve
-          │    (w/ feedback)  │            │
-          └───────────────────┘            ▼
-                       ┌────────────────────────────────┐
-                       │    4. Monitor Agent             │
-                       │                                 │
-                       │    Audits full pipeline          │
-                       │    Writes PR summary            │
-                       │    Creates GitHub PR            │
-                       └───────────────┬────────────────┘
-                                       │
-                                       ▼
-                       ┌────────────────────────────────┐
-                       │            Done                 │
-                       │      PR on target repo          │
-                       └────────────────────────────────┘
+```mermaid
+flowchart TD
+    Human["Human"] -->|describes task| Assistant["AI Assistant\n(Claude Code / Desktop / MCP client)"]
+    Assistant -->|creates TaskSpec via MCP| Controller
 
-  All retry loops are bounded by spec.loop_policy.max_retries
-  Exceeding limit → escalate to human
+    subgraph Cluster ["Kubernetes Cluster"]
+        Controller["Controller\n(kopf operator)"]
+        Controller -->|"creates namespace, credentials,\nNetworkPolicy, git branch"| Executor
+
+        subgraph Sandbox ["gVisor-sandboxed pods"]
+            Executor["Executor Agent\nWrites code + tests\nRuns deterministic gates\n(lint · tests · complexity)"]
+            Executor -->|gates pass| Reviewer
+
+            Reviewer["Reviewer Agent\n(read-only)\nCode quality · Security\nArchitecture · Test coverage"]
+            Reviewer -->|approve| Monitor
+
+            Monitor["Monitor Agent\nAudits pipeline · Creates PR\nPolls CI checks"]
+        end
+
+        Executor -->|"gates fail — retry w/ feedback"| Executor
+        Reviewer -->|"request-changes — w/ feedback"| Executor
+        Monitor -->|"CI fails — w/ feedback"| Executor
+    end
+
+    Monitor -->|approve| Done["Done\nPR on target repo"]
+    Reviewer -->|reject| Escalate["Escalate to human"]
+
+    style Sandbox fill:#f8f9fa,stroke:#495057
+    style Cluster fill:#fff,stroke:#dee2e6
+    style Done fill:#d4edda,stroke:#28a745
+    style Escalate fill:#fff3cd,stroke:#ffc107
 ```
 
 Each agent runs as a Kubernetes Job in a gVisor-sandboxed pod with scoped credentials, restricted networking, and resource limits. Git branches are the shared workspace — no PVCs, no shared volumes, no pod-to-pod communication.
