@@ -1,0 +1,9 @@
+{
+  "status": "success",
+  "commit_sha": "140b675fd42c229e74d89b2f565d0a5525894a06",
+  "summary": "Task completed with all gates passing",
+  "files_changed": [
+    ".nubi/test-docs-mcp-entry-3/gates.json"
+  ],
+  "error": ""
+}
