@@ -1,0 +1,20 @@
+{
+  "decision": "flag",
+  "summary": "Implementation is correct but flagged due to skipped gates (ruff/mypy/pytest not in PATH) and scope creep from unrelated changes in monitor_entrypoint.py, shell.py, github_api.py, and Dockerfile.",
+  "pr_summary": "## What Changed\n\nAdded `retry_task` and `cancel_task` MCP tools to give the MCP server full task lifecycle control.\n\n**Implementation highlights:**\n- Added `RETRY_ANNOTATION` and `CANCEL_ANNOTATION` constants in `src/nubi/crd/defaults.py`\n- Added `CANCELLED` phase to the `Phase` enum in `src/nubi/crd/schema.py`\n- Added `patch_taskspec_annotation()` helper in `src/nubi/mcp/k8s.py` using JSON merge patch\n- Added `on_cancel_requested` kopf handler in `src/nubi/controller/handlers.py` to watch the cancel annotation\n- Added `retry_task` and `cancel_task` MCP tools in `src/nubi/mcp/server.py` following existing patterns\n- Comprehensive test coverage added in `tests/mcp/test_server.py`, `tests/test_handlers.py`, and `tests/test_schema.py`\n\n**Validation:**\n- Only `diff_size` gate passed; ruff/mypy/pytest were skipped (tools not in PATH)\n- Reviewer approved with thorough feedback\n\n**⚠️ Scope note:** The diff includes changes beyond the task scope (monitor escalation, git safety blocking, CI feedback improvements). These should be reviewed separately or reverted if not intended.\n\n## Key Decisions\n- Annotation values use Unix timestamps as strings\n- Error handling returns strings (doesn't raise), matching existing MCP tool patterns\n- Terminal phase validation in MCP tools prevents invalid operations\n- Cancel handler ignores empty annotations and terminal phases",
+  "concerns": [
+    {
+      "severity": "major",
+      "area": "process",
+      "description": "All gate tools (ruff, mypy, pytest) were skipped because 'not found in PATH'. The overall_passed=true is misleading since lint/type/test gates didn't actually run. This should be investigated."
+    },
+    {
+      "severity": "major",
+      "area": "output",
+      "description": "Diff includes unrelated changes to monitor_entrypoint.py (CI timeout escalation), github_api.py (feedback limits), shell.py (git safety blocking), Dockerfile (dev deps), and TODO.md. These were not part of the task description and should be reviewed separately."
+    }
+  ],
+  "pr_url": "",
+  "ci_status": "",
+  "ci_feedback": ""
+}
