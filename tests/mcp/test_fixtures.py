@@ -32,8 +32,9 @@ class MockApiException(Exception):
 class MockFastMCP:
     """Mock for mcp.server.fastmcp.FastMCP that supports the @tool() decorator."""
 
-    def __init__(self, name: str, port: int = 8080) -> None:
+    def __init__(self, name: str, host: str = "127.0.0.1", port: int = 8080) -> None:
         self.name = name
+        self.host = host
         self.port = port
         self._tools: dict = {}
 
