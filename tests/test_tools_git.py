@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from nubi.tools.git import (
     configure,
     git_clone,
@@ -12,7 +14,54 @@ from nubi.tools.git import (
     git_log,
     git_push,
     git_status,
+    normalize_repo,
 )
+
+
+class TestNormalizeRepo:
+    def test_owner_repo(self) -> None:
+        assert normalize_repo("kuuji/nubi") == "kuuji/nubi"
+
+    def test_full_https_url(self) -> None:
+        assert normalize_repo("https://github.com/kuuji/nubi") == "kuuji/nubi"
+
+    def test_full_url_with_git_suffix(self) -> None:
+        assert normalize_repo("https://github.com/kuuji/nubi.git") == "kuuji/nubi"
+
+    def test_url_with_trailing_slash(self) -> None:
+        assert normalize_repo("https://github.com/kuuji/nubi/") == "kuuji/nubi"
+
+    def test_www_url(self) -> None:
+        assert normalize_repo("https://www.github.com/kuuji/nubi") == "kuuji/nubi"
+
+    def test_http_url(self) -> None:
+        assert normalize_repo("http://github.com/kuuji/nubi") == "kuuji/nubi"
+
+    def test_owner_repo_with_git_suffix(self) -> None:
+        assert normalize_repo("kuuji/nubi.git") == "kuuji/nubi"
+
+    def test_whitespace_stripped(self) -> None:
+        assert normalize_repo("  kuuji/nubi  ") == "kuuji/nubi"
+
+    def test_invalid_no_slash(self) -> None:
+        with pytest.raises(ValueError, match="Invalid repo format"):
+            normalize_repo("nubi")
+
+    def test_invalid_random_url(self) -> None:
+        with pytest.raises(ValueError, match="Invalid repo format"):
+            normalize_repo("https://gitlab.com/kuuji/nubi")
+
+    def test_invalid_ssh_url(self) -> None:
+        with pytest.raises(ValueError, match="Invalid repo format"):
+            normalize_repo("git@github.com:kuuji/nubi.git")
+
+    def test_invalid_multi_segment_path(self) -> None:
+        with pytest.raises(ValueError, match="Invalid repo format"):
+            normalize_repo("foo/bar/baz")
+
+    def test_invalid_multi_segment_github_url(self) -> None:
+        with pytest.raises(ValueError, match="Invalid repo format"):
+            normalize_repo("https://github.com/foo/bar/baz")
 
 
 class TestGitClone:
@@ -79,6 +128,15 @@ class TestGitCommit:
         calls_str = str(mock_run.call_args_list)
         assert "add" in calls_str
         assert "commit" in calls_str
+
+    @patch("nubi.tools.git.subprocess.run")
+    def test_stages_specific_files(self, mock_run: MagicMock) -> None:
+        configure("/workspace")
+        mock_run.return_value = MagicMock(returncode=0, stdout="committed", stderr="")
+        git_commit(message="test commit", files=["src/main.py", "README.md"])
+        add_call = mock_run.call_args_list[0]
+        args = add_call[0][0]
+        assert args == ["git", "add", "--", "src/main.py", "README.md"]
 
 
 class TestGitPush:

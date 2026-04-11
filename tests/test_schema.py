@@ -5,6 +5,7 @@ from pydantic import ValidationError
 
 from nubi.crd.schema import (
     Phase,
+    TaskInputs,
     TaskSpecResource,
     TaskSpecSpec,
     TaskSpecStatus,
@@ -129,6 +130,27 @@ class TestMinimalSpecDefaults:
     def test_default_decomposition_disabled(self):
         spec = TaskSpecSpec.model_validate(MINIMAL_SPEC)
         assert spec.decomposition.allow is False
+
+
+# -- Repo normalization in TaskInputs ----------------------------------------
+
+
+class TestTaskInputsRepoNormalization:
+    def test_normalizes_full_url(self) -> None:
+        inputs = TaskInputs(repo="https://github.com/kuuji/nubi")
+        assert inputs.repo == "kuuji/nubi"
+
+    def test_normalizes_url_with_git_suffix(self) -> None:
+        inputs = TaskInputs(repo="https://github.com/kuuji/nubi.git")
+        assert inputs.repo == "kuuji/nubi"
+
+    def test_passes_through_owner_repo(self) -> None:
+        inputs = TaskInputs(repo="kuuji/nubi")
+        assert inputs.repo == "kuuji/nubi"
+
+    def test_rejects_invalid_repo(self) -> None:
+        with pytest.raises(ValidationError, match="Invalid repo format"):
+            TaskInputs(repo="nubi")
 
 
 # -- 3. Invalid type raises ValidationError ----------------------------------

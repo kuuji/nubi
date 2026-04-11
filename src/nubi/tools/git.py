@@ -2,11 +2,39 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 
 from strands import tool
 
 _workspace: str = "/workspace"
+
+_OWNER_REPO_SEGMENT = r"[A-Za-z0-9._-]+"
+_GITHUB_URL_RE = re.compile(
+    rf"^(?:https?://)?(?:www\.)?github\.com/(?P<owner>{_OWNER_REPO_SEGMENT})/"
+    rf"(?P<repo>{_OWNER_REPO_SEGMENT}?)(?:\.git)?/?$"
+)
+_OWNER_REPO_RE = re.compile(rf"^(?P<owner>{_OWNER_REPO_SEGMENT})/(?P<repo>{_OWNER_REPO_SEGMENT})$")
+
+
+def normalize_repo(repo: str) -> str:
+    """Normalize a repo identifier to owner/repo format.
+
+    Accepts: 'owner/repo', 'https://github.com/owner/repo',
+    'https://github.com/owner/repo.git', etc.
+
+    Rejects SSH URLs, non-GitHub hosts, and anything that doesn't
+    look like a single owner/repo pair.
+    """
+    repo = repo.strip()
+    m = _GITHUB_URL_RE.match(repo)
+    if m:
+        return f"{m.group('owner')}/{m.group('repo')}"
+    # Bare owner/repo form — allow an optional .git suffix.
+    bare = repo.removesuffix(".git")
+    if _OWNER_REPO_RE.match(bare):
+        return bare
+    raise ValueError(f"Invalid repo format: {repo!r} — expected 'owner/repo' or a GitHub URL")
 
 
 def configure(workspace: str) -> None:
@@ -34,6 +62,7 @@ def git_clone(repo: str, branch: str, token: str, workspace: str) -> None:
 
     Not a @tool — called by the entrypoint before the agent starts.
     """
+    repo = normalize_repo(repo)
     # safe.directory is handled via GIT_CONFIG_* env vars set in the container spec.
     url = f"https://x-access-token:{token}@github.com/{repo}.git"
     result = subprocess.run(
@@ -90,13 +119,17 @@ def git_log(max_count: int = 10) -> str:
 
 
 @tool
-def git_commit(message: str) -> str:
-    """Stage all changes and create a commit.
+def git_commit(message: str, files: list[str] | None = None) -> str:
+    """Stage changes and create a commit.
 
     Args:
         message: The commit message.
+        files: Specific files/directories to stage. If omitted, stages all changes.
     """
-    _git("add", "-A")
+    if files:
+        _git("add", "--", *files)
+    else:
+        _git("add", "-A")
     return _git("commit", "-m", message)
 
 

@@ -33,7 +33,7 @@ class TestMain:
         mock_agent_factory: MagicMock,
         mock_subprocess: MagicMock,
     ) -> None:
-        os.makedirs("/tmp/test-workspace", exist_ok=True)
+        os.makedirs("/tmp/test-workspace/.git/info", exist_ok=True)
         mock_agent = MagicMock()
         mock_agent.return_value = "Done"
         mock_agent_factory.return_value = mock_agent
@@ -92,6 +92,47 @@ class TestMain:
     @patch("nubi.entrypoint.get_tools", return_value=[])
     @patch("nubi.entrypoint.git_clone")
     @patch("nubi.entrypoint.write_result")
+    @patch.dict("os.environ", {**ENV_VARS, "NUBI_WORKSPACE": "/tmp/test-workspace-exclude"})
+    def test_workspace_excludes_not_duplicated_on_rerun(
+        self,
+        mock_write: MagicMock,
+        mock_clone: MagicMock,
+        mock_tools: MagicMock,
+        mock_agent_factory: MagicMock,
+        mock_subprocess: MagicMock,
+    ) -> None:
+        workspace = "/tmp/test-workspace-exclude"
+        exclude_path = os.path.join(workspace, ".git", "info", "exclude")
+        os.makedirs(os.path.dirname(exclude_path), exist_ok=True)
+        # Start with an empty exclude file (as `git init` would produce).
+        with open(exclude_path, "w") as f:
+            f.write("")
+
+        mock_agent = MagicMock()
+        mock_agent.return_value = "Done"
+        mock_agent_factory.return_value = mock_agent
+        mock_subprocess.return_value = MagicMock(stdout="abc\n", stderr="", returncode=0)
+
+        from nubi.entrypoint import main
+
+        # First run writes the block.
+        main()
+        with open(exclude_path) as f:
+            first = f.read()
+        assert first.count("# nubi workspace excludes") == 1
+        assert first.count(".nubi/") == 1
+
+        # Second run must be a no-op on the exclude file.
+        main()
+        with open(exclude_path) as f:
+            second = f.read()
+        assert second == first
+
+    @patch("nubi.entrypoint.subprocess.run")
+    @patch("nubi.entrypoint.create_executor_agent")
+    @patch("nubi.entrypoint.get_tools", return_value=[])
+    @patch("nubi.entrypoint.git_clone")
+    @patch("nubi.entrypoint.write_result")
     @patch.dict("os.environ", ENV_VARS)
     def test_writes_success_result(
         self,
@@ -101,7 +142,7 @@ class TestMain:
         mock_agent_factory: MagicMock,
         mock_subprocess: MagicMock,
     ) -> None:
-        os.makedirs("/tmp/test-workspace", exist_ok=True)
+        os.makedirs("/tmp/test-workspace/.git/info", exist_ok=True)
         mock_agent = MagicMock()
         mock_agent.return_value = "summary text"
         mock_agent_factory.return_value = mock_agent
