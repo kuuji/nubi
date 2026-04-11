@@ -20,6 +20,11 @@
 - [ ] Context management — needs more research. Subagent approach solved overflow but lost error detail. Scoped gates help. Open question.
 - [x] Deploy manifests — Kustomize base, MCP Dockerfile, split monolithic deployment.yaml (PR #6, done by nubi)
 - [ ] Deploy to gitops-lab — ArgoCD Application pointing to kuuji/nubi/manifests/, cluster-specific secrets + ingress for MCP
+- [ ] Repo input normalization — `git_clone` should strip `https://github.com/` prefix if a full URL is passed instead of `owner/repo`
+- [ ] MCP create_taskspec validation — validate and normalize `inputs.repo` before creating the CR (reject or strip full URLs)
+- [ ] Controller delete handler — add `@kopf.on.delete` to clean up task namespace, jobs, and pods when a TaskSpec is deleted
+- [ ] Controller update/retry handling — add `@kopf.on.update` or retry logic so re-applying a failed TaskSpec re-runs the pipeline instead of being silently ignored
+- [ ] Planner network inference — the task interview/planner should analyze the task description to determine what network access the agent will need (e.g. external APIs, package registries) and set `constraints.network_access` accordingly
 - [ ] Better CI feedback — pass actual check run output to executor on retry, don't retry on timeouts
 - [ ] Planner as MCP skill — interactive task scoping through conversation, then submit via MCP
 - [ ] Langfuse integration — tracing, cost tracking, observability

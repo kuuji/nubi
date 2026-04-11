@@ -93,7 +93,7 @@ class TaskConstraints(BaseModel):
 
     timeout: str = Field(default=DEFAULT_TIMEOUT)
     total_timeout: str = Field(default=DEFAULT_TOTAL_TIMEOUT)
-    network_access: list[str] = Field(default_factory=list)
+    network_access: list[str] = Field(default_factory=lambda: ["github.com"])
     tools: list[str] = Field(default_factory=list)
     resources: ResourceConstraints = Field(default_factory=ResourceConstraints)
 
