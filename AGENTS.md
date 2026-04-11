@@ -32,7 +32,7 @@ docker build -f images/agent/Dockerfile -t ghcr.io/kuuji/nubi-agent:latest .
 docker build -f images/controller/Dockerfile -t ghcr.io/kuuji/nubi-controller:latest .
 
 # Apply CRD to cluster
-kubectl apply -f manifests/crd.yaml
+kubectl apply -f manifests/base/crd.yaml
 ```
 
 ## Verification

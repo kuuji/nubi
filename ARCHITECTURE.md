@@ -391,8 +391,9 @@ kuuji/nubi/
 │   ├── monitor_entrypoint.py  # Monitor pod entrypoint
 │   └── exceptions.py          # Custom exception types
 ├── manifests/
-│   ├── crd.yaml               # TaskSpec CRD definition
-│   └── deployment.yaml        # Controller + RBAC + RuntimeClass
+│   └── base/
+│       ├── crd.yaml           # TaskSpec CRD definition
+│       └── ...                # Controller + RBAC + RuntimeClass
 ├── images/
 │   ├── controller/Dockerfile  # Controller image (kopf + nubi)
 │   ├── agent/Dockerfile       # Unified agent image (Strands + tools)

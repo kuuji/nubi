@@ -45,7 +45,7 @@ You can also apply TaskSpecs directly with `kubectl` or through GitOps (ArgoCD).
 
 ```bash
 # Apply CRD
-kubectl apply -f manifests/crd.yaml
+kubectl apply -f manifests/base/crd.yaml
 
 # Deploy controller with Kustomize
 kubectl apply -k manifests/

@@ -345,7 +345,7 @@ cmd_up() {
     fi
 
     info "Applying CRD..."
-    kubectl apply -f manifests/crd.yaml --context "${CONTEXT}"
+    kubectl apply -f manifests/base/crd.yaml --context "${CONTEXT}"
 
     load_env
 

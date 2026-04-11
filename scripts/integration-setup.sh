@@ -25,7 +25,7 @@ fi
 
 # 2. Apply CRD
 info "Applying CRD..."
-kubectl apply -f "${ROOT_DIR}/manifests/crd.yaml" --context "${CONTEXT}"
+kubectl apply -f "${ROOT_DIR}/manifests/base/crd.yaml" --context "${CONTEXT}"
 
 # 3. Apply namespace + RBAC (not the Deployment — kopf runs in-process during tests)
 info "Applying namespace and RBAC..."

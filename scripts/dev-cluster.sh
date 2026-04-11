@@ -25,7 +25,7 @@ cmd_up() {
     kubectl wait --for=condition=Ready nodes --all --timeout=60s --context "k3d-${CLUSTER_NAME}"
 
     info "Applying CRD..."
-    kubectl apply -f manifests/crd.yaml --context "k3d-${CLUSTER_NAME}"
+    kubectl apply -f manifests/base/crd.yaml --context "k3d-${CLUSTER_NAME}"
 
     info "Applying manifests..."
     kubectl apply -k manifests/ --context "k3d-${CLUSTER_NAME}"

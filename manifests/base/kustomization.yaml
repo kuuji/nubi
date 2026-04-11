@@ -11,4 +11,4 @@ resources:
   - runtimeclass.yaml
   - mcp-deployment.yaml
   - mcp-service.yaml
-  - ../crd.yaml
+  - crd.yaml
