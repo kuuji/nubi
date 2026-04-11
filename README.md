@@ -161,7 +161,7 @@ Nubi is functional but early. Here's where things stand:
 - **gVisor sandboxing** — RuntimeClass, restricted PSS, shell allowlist, NetworkPolicy, no K8s API access from agent pods
 - **MCP server** — FastMCP with streamable HTTP, 5 tools (create task, list tasks, get status, get logs, get results)
 - **Integration tests** — 8 scenarios running against real k3d clusters in CI
-- **420 unit tests** passing, mypy strict, ruff clean
+- **420 unit tests** passing (71% line coverage), mypy strict, ruff clean
 
 ### What hasn't been tested extensively
 
