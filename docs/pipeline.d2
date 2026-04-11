@@ -1,0 +1,87 @@
+direction: down
+
+you: You {
+  shape: person
+}
+
+assistant: AI Assistant\n(MCP client)
+
+controller: Controller {
+  style.fill: "#e8f4fd"
+  style.stroke: "#2196f3"
+}
+
+you -> assistant: describes task
+assistant -> controller: TaskSpec via MCP
+
+pipeline: gVisor-sandboxed Kubernetes pods {
+  style.fill: "#fafafa"
+  style.stroke: "#bdbdbd"
+  style.border-radius: 12
+
+  executor: "Executor\n\nWrites code + tests\nRuns deterministic gates\n(lint · tests · complexity)" {
+    style.fill: "#fff3e0"
+    style.stroke: "#ff9800"
+    style.border-radius: 8
+    style.font-size: 14
+  }
+
+  reviewer: "Reviewer (read-only)\n\nCode quality · Security\nArchitecture · Test coverage" {
+    style.fill: "#e8f5e9"
+    style.stroke: "#4caf50"
+    style.border-radius: 8
+    style.font-size: 14
+  }
+
+  monitor: "Monitor\n\nAudits pipeline\nCreates PR · Polls CI" {
+    style.fill: "#f3e5f5"
+    style.stroke: "#9c27b0"
+    style.border-radius: 8
+    style.font-size: 14
+  }
+
+  executor -> reviewer: gates pass {
+    style.stroke: "#4caf50"
+  }
+  reviewer -> monitor: approve {
+    style.stroke: "#4caf50"
+  }
+}
+
+controller -> pipeline.executor: namespace · credentials · branch
+
+done: PR created {
+  shape: oval
+  style.fill: "#c8e6c9"
+  style.stroke: "#388e3c"
+}
+
+pipeline.monitor -> done: approve {
+  style.stroke: "#4caf50"
+}
+
+escalate: Escalate to human {
+  shape: oval
+  style.fill: "#fff9c4"
+  style.stroke: "#f9a825"
+}
+
+pipeline.reviewer -> escalate: reject {
+  style.stroke-dash: 5
+  style.stroke: "#e53935"
+}
+
+pipeline.executor -> pipeline.executor: gates fail {
+  style.stroke-dash: 5
+  style.stroke: "#ff9800"
+}
+
+pipeline.reviewer -> pipeline.executor: request changes {
+  style.stroke-dash: 5
+  style.stroke: "#ff9800"
+}
+
+pipeline.monitor -> pipeline.executor: CI failed {
+  style.stroke-dash: 5
+  style.stroke: "#ff9800"
+}
