@@ -908,12 +908,14 @@ async def on_retry_requested(
         secret_name = await ensure_stage_secret(ns_name, name, "executor")
     except CredentialError:
         patch.status["phase"] = Phase.FAILED.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
         raise
 
     try:
         job_name = await create_executor_job(name, ns_name, task_spec, secret_name, namespace)
     except SandboxError:
         patch.status["phase"] = Phase.FAILED.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
         raise
 
     patch.status["phase"] = Phase.EXECUTING.value
