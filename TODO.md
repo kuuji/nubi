@@ -27,8 +27,9 @@
 - [ ] Graceful task cancellation — ability to stop a running task via TaskSpec status/MCP without deleting the namespace, so logs and artifacts are preserved for debugging
 - [x] Smarter git_commit — `git_commit` accepts optional `files` param for selective staging; workspace excludes prevent junk from being staged
 - [x] Workspace .gitignore — uses `.git/info/exclude` (local-only, never committed) to exclude `.cache/`, `.local/`, `__pycache__/`, `.venv/`, `.nubi/`
-- [x] Guard against destructive git operations — blocked `git reset`, `git checkout .`, `git clean`, `git rebase`, `git merge`, `git push --force/-f` in shell allowlist
+- [x] Guard against destructive git operations — blocked `git reset --hard/--merge/--keep`, `git checkout .`/`-- <file>`, `git clean`, `git rebase`, `git merge`, `git push --force/-f` in shell allowlist (soft reset / unstage remain allowed)
 - [x] Agent pip install leaks into workspace — Dockerfile now installs `.[dev]` so ruff/pytest/radon are pre-installed in PATH
+- [ ] Slim agent image — `.[dev]` pulls in all test-only deps (pytest-asyncio, respx, etc.). Consider a narrower `[agent-gates]` extra scoped to `{ruff, pytest, radon, mypy}` if image size becomes a concern. Measure first.
 - [ ] Planner network inference — the task interview/planner should analyze the task description to determine what network access the agent will need (e.g. external APIs, package registries) and set `constraints.network_access` accordingly
 - [x] Better CI feedback — CI timeouts escalate instead of retrying, removed double-truncation of check output, bumped per-check detail to 4000 chars
 - [ ] Planner as MCP skill — interactive task scoping through conversation, then submit via MCP

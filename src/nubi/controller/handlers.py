@@ -832,7 +832,7 @@ async def on_monitor_completion(
         patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
         patch.status["stages"] = {**status.get("stages", {}), "monitor": monitor_stage}
         patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = "processed"
-        logger.warning(
+        logger.error(
             "Task %s/%s monitor escalated: %s",
             namespace,
             name,

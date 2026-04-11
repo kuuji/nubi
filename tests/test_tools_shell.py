@@ -118,13 +118,18 @@ class TestCommandAllowlist:
         assert result is not None
         assert "Blocked" in result
 
-    def test_blocked_git_reset_soft(self) -> None:
-        result = _validate_command("git reset --soft HEAD~1")
+    def test_blocked_git_reset_merge(self) -> None:
+        result = _validate_command("git reset --merge HEAD~1")
         assert result is not None
         assert "Blocked" in result
 
     def test_blocked_git_checkout_dot(self) -> None:
         result = _validate_command("git checkout .")
+        assert result is not None
+        assert "Blocked" in result
+
+    def test_blocked_git_checkout_dashdash(self) -> None:
+        result = _validate_command("git checkout -- src/file.py")
         assert result is not None
         assert "Blocked" in result
 
@@ -138,6 +143,11 @@ class TestCommandAllowlist:
         assert result is not None
         assert "Blocked" in result
 
+    def test_blocked_git_merge(self) -> None:
+        result = _validate_command("git merge origin/main")
+        assert result is not None
+        assert "Blocked" in result
+
     def test_blocked_git_push_force(self) -> None:
         result = _validate_command("git push origin main --force")
         assert result is not None
@@ -147,6 +157,20 @@ class TestCommandAllowlist:
         result = _validate_command("git push -f origin main")
         assert result is not None
         assert "Blocked" in result
+
+    def test_blocked_git_push_force_with_lease(self) -> None:
+        # force-with-lease still rewrites history; block it deliberately.
+        result = _validate_command("git push --force-with-lease origin main")
+        assert result is not None
+        assert "Blocked" in result
+
+    def test_allowed_git_reset_soft(self) -> None:
+        # Soft reset is a legitimate unstage workflow.
+        assert _validate_command("git reset --soft HEAD~1") is None
+
+    def test_allowed_git_reset_unstage(self) -> None:
+        # `git reset HEAD file.py` unstages without touching the worktree.
+        assert _validate_command("git reset HEAD src/main.py") is None
 
     def test_allowed_git_diff(self) -> None:
         assert _validate_command("git diff HEAD~1") is None

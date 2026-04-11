@@ -103,9 +103,11 @@ BLOCKED_PATTERNS: list[re.Pattern[str]] = [
     # Device access
     re.compile(r"/dev/tcp/"),
     re.compile(r"/dev/udp/"),
-    # Destructive git operations
-    re.compile(r"\bgit\s+reset\b"),
-    re.compile(r"\bgit\s+checkout\s+\."),
+    # Destructive git operations — conflicts/rebases must escalate to a human.
+    # `git reset --soft`/default is allowed so agents can unstage; only the
+    # workspace-destroying forms are blocked.
+    re.compile(r"\bgit\s+reset\s+(--hard|--merge|--keep)\b"),
+    re.compile(r"\bgit\s+checkout\s+(\.|--)"),
     re.compile(r"\bgit\s+clean\b"),
     re.compile(r"\bgit\s+rebase\b"),
     re.compile(r"\bgit\s+merge\b"),
