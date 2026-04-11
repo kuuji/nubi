@@ -2,6 +2,14 @@
 
 A Kubernetes-native controller that orchestrates AI agent workflows. Describe what you want to an AI assistant, and Nubi turns it into a sandboxed pipeline of code generation, deterministic validation, agentic review, and PR creation — all inside your cluster.
 
+### Why Kubernetes?
+
+Kubernetes already solves sandboxing (gVisor RuntimeClass), resource limits (ResourceQuota), network isolation (NetworkPolicy), scheduling (Jobs), and cleanup (namespace GC). Instead of reinventing these primitives, Nubi builds on a battle-tested platform — the controller is just a kopf operator, and every agent run is a standard K8s Job.
+
+### Why MCP?
+
+The pipeline expects a structured `TaskSpec` CRD as input, but humans don't think in YAML. The MCP server bridges that gap — you describe what you want in conversation, and the MCP server creates the CRD for you. It runs inside the cluster with permissions scoped to creating TaskSpecs only, but any MCP-compatible client (Claude Code, Claude Desktop, or anything else) can connect to it.
+
 ## How It Works
 
 You describe a task to your AI assistant (Claude Code, Claude Desktop, or any MCP client). The MCP server translates your request into a `TaskSpec` CRD and applies it. From there, the controller runs the full pipeline autonomously:
