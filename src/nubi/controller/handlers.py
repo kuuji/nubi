@@ -18,10 +18,12 @@ from nubi.controller.results import (
 )
 from nubi.controller.sandbox import create_executor_job, create_monitor_job, create_reviewer_job
 from nubi.crd.defaults import (
+    CANCEL_ANNOTATION,
     CREDENTIAL_GITHUB_TOKEN,
     LABEL_TASKSPEC_NAMESPACE,
     MASTER_SECRET_NAME,
     MASTER_SECRET_NAMESPACE,
+    RETRY_ANNOTATION,
 )
 from nubi.crd.schema import Phase, TaskSpecSpec
 from nubi.exceptions import CredentialError, NamespaceError, ResultError, SandboxError
@@ -33,7 +35,6 @@ REVIEWER_JOB_STATUS_ANNOTATION = "nubi.io/reviewer-job-completed"
 MONITOR_JOB_STATUS_ANNOTATION = "nubi.io/monitor-job-completed"
 JOB_NAME_ANNOTATION = "nubi.io/job-name"
 JOB_NAMESPACE_ANNOTATION = "nubi.io/job-namespace"
-RETRY_ANNOTATION = "nubi.io/retry"
 
 # Keep for backward compat in tests that reference it
 JOB_STATUS_ANNOTATION = EXECUTOR_JOB_STATUS_ANNOTATION
@@ -750,7 +751,7 @@ async def on_monitor_completion(
     if monitor.ci_status:
         monitor_stage["ciStatus"] = monitor.ci_status
     if monitor.ci_feedback:
-        monitor_stage["ciFeedback"] = monitor.ci_feedback[:500]
+        monitor_stage["ciFeedback"] = monitor.ci_feedback
 
     # CI failure: kick back to executor if retries remain
     if monitor.decision == "ci-failed":
@@ -823,6 +824,20 @@ async def on_monitor_completion(
             executor_job,
             ci_retries + 1,
             max_ci_retries,
+        )
+        return
+
+    # Escalate decision → Escalated phase (needs human attention)
+    if monitor.decision == "escalate":
+        patch.status["phase"] = Phase.ESCALATED.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = {**status.get("stages", {}), "monitor": monitor_stage}
+        patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = "processed"
+        logger.error(
+            "Task %s/%s monitor escalated: %s",
+            namespace,
+            name,
+            monitor.summary[:200],
         )
         return
 
@@ -934,3 +949,54 @@ async def on_retry_requested(
         job_name,
         ns_name,
     )
+
+
+@kopf.on.field(  # type: ignore[arg-type]
+    "taskspecs",
+    group="nubi.io",
+    version="v1",
+    field=("metadata", "annotations", CANCEL_ANNOTATION),
+)
+async def on_cancel_requested(
+    spec: dict[str, Any],
+    name: str,
+    namespace: str,
+    status: dict[str, Any],
+    patch: Any,
+    old: Any,
+    new: Any,
+    **kwargs: Any,
+) -> None:
+    """Cancel a running task when the cancel annotation is set.
+
+    Sets the phase to Cancelled to stop new stage creation.
+    Running jobs will complete but no new stages will be spawned.
+    """
+    if not new:
+        return
+
+    current_phase = status.get("phase")
+    terminal_phases = {
+        Phase.DONE.value,
+        Phase.FAILED.value,
+        Phase.ESCALATED.value,
+        Phase.CANCELLED.value,
+    }
+    if current_phase in terminal_phases:
+        logger.info(
+            "TaskSpec %s/%s cancel requested but phase is %s (terminal), ignoring",
+            namespace,
+            name,
+            current_phase,
+        )
+        return
+
+    logger.info(
+        "TaskSpec %s/%s cancelled (phase=%s), stopping pipeline",
+        namespace,
+        name,
+        current_phase,
+    )
+
+    patch.status["phase"] = Phase.CANCELLED.value
+    patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()

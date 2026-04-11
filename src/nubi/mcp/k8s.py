@@ -139,6 +139,47 @@ def delete_taskspec(name: str, namespace: str) -> dict[str, Any]:
     return result
 
 
+def patch_taskspec_annotation(
+    name: str,
+    namespace: str,
+    annotation: str,
+    value: str,
+) -> dict[str, Any]:
+    """Patch a TaskSpec with an annotation using JSON merge patch.
+
+    Args:
+        name: TaskSpec name.
+        namespace: Kubernetes namespace.
+        annotation: The annotation key (e.g., "nubi.io/retry").
+        value: The annotation value.
+
+    Returns:
+        The patched TaskSpec resource as a dict.
+
+    Raises:
+        ApiException: If the API call fails.
+    """
+    _ensure_config()
+    api = client.CustomObjectsApi()
+    body: dict[str, Any] = {
+        "metadata": {
+            "annotations": {
+                annotation: value,
+            }
+        }
+    }
+    result: dict[str, Any] = api.patch_namespaced_custom_object(
+        group="nubi.io",
+        version="v1",
+        namespace=namespace,
+        plural="taskspecs",
+        name=name,
+        body=body,
+        _content_type="application/merge-patch+json",
+    )
+    return result
+
+
 def get_pod_logs(name: str, namespace: str, stage: str) -> str:
     """Get logs from a pod for a specific task stage.
 

@@ -20,6 +20,7 @@ from nubi.controller.handlers import (
     MONITOR_JOB_STATUS_ANNOTATION,
     REVIEWER_JOB_STATUS_ANNOTATION,
     _annotate_task_completion,
+    on_cancel_requested,
     on_executor_completion,
     on_job_status_change,
     on_monitor_completion,
@@ -741,6 +742,33 @@ class TestOnMonitorCompletion:
         assert len(fp.status["stages"]["monitor"]["concerns"]) == 1
         assert fp.meta.annotations.get(MONITOR_JOB_STATUS_ANNOTATION) == "processed"
 
+    @patch("nubi.controller.handlers.read_monitor_result", new_callable=AsyncMock)
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_escalate_sets_escalated_phase(
+        self,
+        mock_token: AsyncMock,
+        mock_monitor: AsyncMock,
+    ) -> None:
+        mock_monitor.return_value = MonitorResult(
+            decision=MonitorDecision.ESCALATE,
+            summary="CI checks timed out — needs human investigation",
+            ci_status="timed_out",
+        )
+
+        fp = FakePatch()
+        await on_monitor_completion(
+            spec=VALID_SPEC_REVIEW_ENABLED,
+            name="task-1",
+            namespace="ns",
+            status={"stages": {"reviewer": {"decision": "approve"}}},
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
+        assert fp.status.get("phase") == "Escalated"
+        assert fp.status["stages"]["monitor"]["decision"] == "escalate"
+        assert fp.meta.annotations.get(MONITOR_JOB_STATUS_ANNOTATION) == "processed"
+
     async def test_failed_job_graceful_degradation(self) -> None:
         fp = FakePatch()
         await on_monitor_completion(
@@ -920,6 +948,90 @@ class TestOnRetryRequested:
         assert fp.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] == ""
         assert fp.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] == ""
         assert fp.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] == ""
+
+
+# -- on_cancel_requested — cancel annotation handler -------------------------
+
+
+class TestOnCancelRequested:
+    async def test_cancel_running_task_sets_phase_to_cancelled(self) -> None:
+        fp = FakePatch()
+        await on_cancel_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={"phase": "Executing"},
+            patch=fp,
+            old=None,
+            new="1712345678",
+        )
+        assert fp.status.get("phase") == "Cancelled"
+        assert fp.status.get("phaseChangedAt") != ""
+
+    async def test_cancel_terminal_done_ignored(self) -> None:
+        fp = FakePatch()
+        await on_cancel_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={"phase": "Done"},
+            patch=fp,
+            old=None,
+            new="1712345678",
+        )
+        assert fp.status == {}
+
+    async def test_cancel_terminal_failed_ignored(self) -> None:
+        fp = FakePatch()
+        await on_cancel_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={"phase": "Failed"},
+            patch=fp,
+            old=None,
+            new="1712345678",
+        )
+        assert fp.status == {}
+
+    async def test_cancel_terminal_escalated_ignored(self) -> None:
+        fp = FakePatch()
+        await on_cancel_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={"phase": "Escalated"},
+            patch=fp,
+            old=None,
+            new="1712345678",
+        )
+        assert fp.status == {}
+
+    async def test_cancel_terminal_cancelled_ignored(self) -> None:
+        fp = FakePatch()
+        await on_cancel_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={"phase": "Cancelled"},
+            patch=fp,
+            old=None,
+            new="1712345678",
+        )
+        assert fp.status == {}
+
+    async def test_cancel_empty_annotation_ignored(self) -> None:
+        fp = FakePatch()
+        await on_cancel_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={"phase": "Executing"},
+            patch=fp,
+            old="1712345678",
+            new=None,
+        )
+        assert fp.status == {}
 
 
 # -- Backward compat alias ---------------------------------------------------

@@ -39,3 +39,8 @@ CREDENTIAL_LLM_API_KEY = "llm-api-key"
 # -- Sandbox job builder -----------------------------------------------------
 
 DEFAULT_AGENT_IMAGE = "ghcr.io/kuuji/nubi-agent:latest"
+
+# -- Annotation keys ---------------------------------------------------------
+
+RETRY_ANNOTATION = "nubi.io/retry"
+CANCEL_ANNOTATION = "nubi.io/cancel"

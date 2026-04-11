@@ -83,6 +83,7 @@ ALLOWED_COMMANDS: set[str] = {
 
 # Patterns that are always blocked, even inside allowed commands.
 BLOCKED_PATTERNS: list[re.Pattern[str]] = [
+    # Network access
     re.compile(r"\bcurl\b"),
     re.compile(r"\bwget\b"),
     re.compile(r"\bnc\b"),
@@ -94,12 +95,24 @@ BLOCKED_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"\btelnet\b"),
     re.compile(r"\bnslookup\b"),
     re.compile(r"\bdig\b"),
+    # Package managers
     re.compile(r"\bapt-get\b"),
     re.compile(r"\bapt\b"),
     re.compile(r"\byum\b"),
     re.compile(r"\bapk\b"),
+    # Device access
     re.compile(r"/dev/tcp/"),
     re.compile(r"/dev/udp/"),
+    # Destructive git operations — conflicts/rebases must escalate to a human.
+    # `git reset --soft`/default is allowed so agents can unstage; only the
+    # workspace-destroying forms are blocked.
+    re.compile(r"\bgit\s+reset\s+(--hard|--merge|--keep)\b"),
+    re.compile(r"\bgit\s+checkout\s+(\.|--)"),
+    re.compile(r"\bgit\s+clean\b"),
+    re.compile(r"\bgit\s+rebase\b"),
+    re.compile(r"\bgit\s+merge\b"),
+    re.compile(r"\bgit\s+push\s+.*--force\b"),
+    re.compile(r"\bgit\s+push\s+-f\b"),
 ]
 
 # Shell operators used to chain commands
