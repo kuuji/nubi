@@ -20,6 +20,7 @@ class MonitorDecision(StrEnum):
     APPROVE = "approve"
     FLAG = "flag"
     CI_FAILED = "ci-failed"
+    ESCALATE = "escalate"
 
 
 class MonitorConcern(BaseModel):

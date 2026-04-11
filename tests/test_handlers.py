@@ -741,6 +741,33 @@ class TestOnMonitorCompletion:
         assert len(fp.status["stages"]["monitor"]["concerns"]) == 1
         assert fp.meta.annotations.get(MONITOR_JOB_STATUS_ANNOTATION) == "processed"
 
+    @patch("nubi.controller.handlers.read_monitor_result", new_callable=AsyncMock)
+    @patch(TOKEN_MOCK, new_callable=AsyncMock, return_value="ghp_test")
+    async def test_escalate_sets_escalated_phase(
+        self,
+        mock_token: AsyncMock,
+        mock_monitor: AsyncMock,
+    ) -> None:
+        mock_monitor.return_value = MonitorResult(
+            decision=MonitorDecision.ESCALATE,
+            summary="CI checks timed out — needs human investigation",
+            ci_status="timed_out",
+        )
+
+        fp = FakePatch()
+        await on_monitor_completion(
+            spec=VALID_SPEC_REVIEW_ENABLED,
+            name="task-1",
+            namespace="ns",
+            status={"stages": {"reviewer": {"decision": "approve"}}},
+            patch=fp,
+            old=None,
+            new="succeeded",
+        )
+        assert fp.status.get("phase") == "Escalated"
+        assert fp.status["stages"]["monitor"]["decision"] == "escalate"
+        assert fp.meta.annotations.get(MONITOR_JOB_STATUS_ANNOTATION) == "processed"
+
     async def test_failed_job_graceful_degradation(self) -> None:
         fp = FakePatch()
         await on_monitor_completion(

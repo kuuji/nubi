@@ -15,7 +15,7 @@ COPY pyproject.toml .
 COPY src/ src/
 
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .
+    && pip install --no-cache-dir ".[dev]"
 
 # Tool availability is controlled at runtime via NUBI_TOOLS env var
 # e.g. NUBI_TOOLS=shell,git,file_read,file_write

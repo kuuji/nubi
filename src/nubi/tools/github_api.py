@@ -239,8 +239,8 @@ def _get_failed_check_runs_feedback(commit_sha: str) -> str:
         summary = output.get("summary", "") or output.get("title", "")
         text = output.get("text", "")
         detail = summary or text
-        if len(detail) > 1000:
-            detail = detail[:1000] + "..."
+        if len(detail) > 4000:
+            detail = detail[:4000] + "..."
         parts.append(f"### {name}\n{detail}" if detail else f"### {name}\nNo details")
 
     return "\n\n".join(parts)

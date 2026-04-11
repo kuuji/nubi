@@ -131,7 +131,16 @@ def main() -> int:
                     poll_interval=ci_poll,
                 )
                 logger.info("CI status: %s", ci_status)
-                if ci_status != "success":
+                if ci_status == "timed_out":
+                    logger.warning("CI checks timed out — not retrying")
+                    audit = MonitorResult(
+                        decision=MonitorDecision.ESCALATE,
+                        summary="CI checks timed out — needs human investigation",
+                        pr_url=audit.pr_url,
+                        ci_status=ci_status,
+                        ci_feedback=ci_feedback,
+                    )
+                elif ci_status != "success":
                     audit = MonitorResult(
                         decision=MonitorDecision.CI_FAILED,
                         summary=f"CI checks {ci_status}",
