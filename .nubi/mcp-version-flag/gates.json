@@ -1,6 +1,85 @@
 {
-  "discovered": [],
-  "gates": [],
-  "overall_passed": false,
-  "attempt": 1
+  "discovered": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "applies_to": [],
+      "command": "ruff check src/ tests/"
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "applies_to": [],
+      "command": "ruff format --check src/ tests/"
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "applies_to": [],
+      "command": "mypy src/nubi/"
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "applies_to": [],
+      "command": "pytest tests/ -v"
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "applies_to": [
+        "*"
+      ],
+      "command": ""
+    }
+  ],
+  "gates": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "status": "skipped",
+      "output": "ruff not found in PATH",
+      "command": "",
+      "duration_seconds": 0.0001506805419921875,
+      "error": ""
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "status": "skipped",
+      "output": "ruff not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00006103515625,
+      "error": ""
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "status": "skipped",
+      "output": "mypy not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00006651878356933594,
+      "error": ""
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "status": "skipped",
+      "output": "pytest not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00006318092346191406,
+      "error": ""
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "status": "passed",
+      "output": " .nubi/mcp-version-flag/gates.json | 6 ++++++\n 1 file changed, 6 insertions(+)\n",
+      "command": "git diff --stat origin/main..HEAD",
+      "duration_seconds": 0.003036975860595703,
+      "error": ""
+    }
+  ],
+  "overall_passed": true,
+  "attempt": 2
 }

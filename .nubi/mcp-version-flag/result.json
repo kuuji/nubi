@@ -1,0 +1,9 @@
+{
+  "status": "success",
+  "commit_sha": "a2d61ad8992b268061dcbbce89c6824f18015cb7",
+  "summary": "Task completed with all gates passing",
+  "files_changed": [
+    ".nubi/mcp-version-flag/gates.json"
+  ],
+  "error": ""
+}
