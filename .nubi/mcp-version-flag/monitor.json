@@ -1,0 +1,20 @@
+{
+  "decision": "flag",
+  "summary": "Audit flagged due to quality gates not being executed - all lint (ruff), type check (mypy), and test (pytest) gates were skipped. While the code implementation looks correct and reviewer provided a thorough review, the absence of gate validation is a significant concern.",
+  "pr_summary": "## Summary\n\nAdds a `--version` flag to `python -m nubi.mcp` that prints `nubi-mcp {version}` and exits.\n\n## What Changed\n\n- **`src/nubi/mcp/__main__.py`**: Added `argparse.ArgumentParser` with `--version` flag that prints the version from `nubi.__version__` and exits with code 0. Uses lazy import for the MCP server to improve version flag performance.\n- **`tests/mcp/test_main.py`**: New test file with 5 tests covering version output, exit codes, and integration with the package version.\n\n## Key Implementation Decisions\n\n- Uses standard `argparse` module (no external dependencies)\n- Lazy import of MCP server keeps `--version` fast and dependency-light\n- Program name set to `nubi-mcp` for user-friendly help messages\n- `main()` function accepts optional `args` parameter for testability\n\n## Validation\n\n- Reviewer approved with comprehensive feedback\n- Only `diff_size` gate passed; lint/type-check/test gates were skipped due to environment issue\n\n## Caveats\n\n⚠️ **All quality gates (ruff, mypy, pytest) were skipped** - tools not found in PATH. The code appears correct based on manual review, but automated validation was not performed. The `.nubi/` artifacts, pip cache, and site-packages files in the diff are CI artifacts that should be excluded from the PR.",
+  "concerns": [
+    {
+      "severity": "critical",
+      "area": "process",
+      "description": "All lint (ruff), type check (mypy), and test (pytest) gates were skipped - tools not found in PATH. Only diff_size gate ran. This means the code was not validated against the project's quality standards."
+    },
+    {
+      "severity": "minor",
+      "area": "output",
+      "description": "The diff includes many unrelated files: pip cache (.cache/pip/), pip install artifacts (.local/lib/python3.12/site-packages/), CI artifacts (.nubi/), and a change to src/nubi/controller/sandbox.py that appears unrelated to the task."
+    }
+  ],
+  "pr_url": "",
+  "ci_status": "",
+  "ci_feedback": ""
+}
