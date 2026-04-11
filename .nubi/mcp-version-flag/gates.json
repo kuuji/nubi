@@ -40,7 +40,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.00010895729064941406,
+      "duration_seconds": 0.00008916854858398438,
       "error": ""
     },
     {
@@ -49,7 +49,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.00005841255187988281,
+      "duration_seconds": 0.00005555152893066406,
       "error": ""
     },
     {
@@ -58,7 +58,7 @@
       "status": "skipped",
       "output": "mypy not found in PATH",
       "command": "",
-      "duration_seconds": 0.00006723403930664062,
+      "duration_seconds": 0.00006866455078125,
       "error": ""
     },
     {
@@ -67,16 +67,16 @@
       "status": "skipped",
       "output": "pytest not found in PATH",
       "command": "",
-      "duration_seconds": 0.00009465217590332031,
+      "duration_seconds": 0.00006246566772460938,
       "error": ""
     },
     {
       "name": "diff_size",
       "category": "diff_size",
       "status": "passed",
-      "output": " ...9e009fe1267c844e36c442e5b3dc645d5eb9865c545b81a | Bin 0 -> 1150 bytes\n ...fe1267c844e36c442e5b3dc645d5eb9865c545b81a.body | Bin 0 -> 20538 bytes\n ...94d9a943f68359da08431dab4af9f86c33962982ea21b5f | Bin 0 -> 1847 bytes\n ...943f68359da08431dab4af9f86c33962982ea21b5f.body | Bin 0 -> 6936 bytes\n ...7ea321ab056bed31a67391a50e82aea9460d349fd057276 | Bin 0 -> 1193 bytes\n ...1ab056bed31a67391a50e82aea9460d349fd057276.body | 107 +++++++\n ...caa92636d8ccfe658d420ba4ed8f67f7f4e835b214255aa | Bin 0 -> 1848 bytes\n ...636d8ccfe658d420ba4ed8f67f7f4e835b214255aa.body | Bin 0 -> 14094 bytes\n ...b9fd2d0a88b65a7d2043b2c343936491ef44dc753aa91e0 | Bin 0 -> 1864 bytes\n ...d0a88b65a7d2043b2c343936491ef44dc753aa91e0.body | Bin 0 -> 21246 bytes\n ...2b69f4692b96903e0d1df2f92839b402221a47a2ca3b5be | Bin 0 -> 1230 bytes\n ...4692b96903e0d1df2f92839b402221a47a2ca3b5be.body |  82 +++++\n ...48c17282ed7a16aa7cbf0ae7aa370d2e20d939a3292aa75 | Bin 0 -> 1165 bytes\n ...282ed7a16aa7cbf0ae7aa370d2e20d939a3292aa75.body |  79 +++++\n ...1861346a483546ee4ebbe92a83f2d3a40e917849c2eb140 | Bin 0 -> 1847 bytes\n ...46a483546ee4ebbe92a83f2d3a40e917849c2eb140.body | Bin 0 -> 7405 bytes\n ...f37c122db841d6fe4cd322bc10d1a558bb00d146b85cb9a | Bin 0 -> 1848 bytes\n ...22db841d6fe4cd322bc10d1a558bb00d146b85cb9a.body | Bin 0 -> 36977 bytes\n ...35917f171c5fe59cc8767e503c75134305eac95c88bc3f8 | Bin 0 -> 1151 bytes\n ...f171c5fe59cc8767e503c75134305eac95c88bc3f8.body |  91 ++++++\n ...c28c72166da85db3d3c34ea7bd39531944f502465cf3a50 | Bin 0 -> 1152 bytes\n ...2166da85db3d3c34ea7bd39531944f502465cf3a50.body | Bin 0 -> 55206 bytes\n ...1358ae7b47b92917f8a6af8c5acecccb52b186c45372c03 | Bin 0 -> 1124 bytes\n ...e7b47b92917f8a6af8c5acecccb52b186c45372c03.body | Bin 0 -> 76356 bytes\n ...11a267af8c06f6fa9fa74e1a06b91e221cbd34f379bb11c | Bin 0 -> 1165 bytes\n ...7af8c06f6fa9fa74e1a06b91e221cbd34f379bb11c.body | Bin 0 -> 14197 bytes\n ...43af368d3fab1e60dda223939e75dacca27a71f0478c552 | Bin 0 -> 1105 bytes\n ...68d3fab1e60dda223939e75dacca27a71f0478c552.body | Bin 0 -> 5098 bytes\n ...5b9608ced10cc1a661cb4850330552cdc6801105598d8e4 | Bin 0 -> 1195 bytes\n ...8ced10cc1a661cb4850330552cdc6801105598d8e4.body | 356 +++++++++++++++++++++\n ...0e6b78a08fee1da61557cd4bdd93a63331b9d474bca9d38 | Bin 0 -> 1150 bytes\n ...8a08fee1da61557cd4bdd93a63331b9d474bca9d38.body | Bin 0 -> 74366 bytes\n ...c1ff29feff55b10f7dee3ce79cfb8c866c278585bcbadb1 | Bin 0 -> 1847 bytes\n ...9feff55b10f7dee3ce79cfb8c866c278585bcbadb1.body | Bin 0 -> 1661 bytes\n ...164036f2cff3c9d0bb0c2b4d1d94bd0814c26b9cbe036b2 | Bin 0 -> 1850 bytes\n ...6f2cff3c9d0bb0c2b4d1d94bd0814c26b9cbe036b2.body | Bin 0 -> 32722 bytes\n ...2b9c55edcd311aeafa35cbf852ab2cc5c3f5d1a1a08e2b5 | Bin 0 -> 1193 bytes\n ...5edcd311aeafa35cbf852ab2cc5c3f5d1a1a08e2b5.body | 152 +++++++++\n ...7d708c14827daac3afc81fbb8306b73de8dd6e3f1f8ea3b |   1 +\n .local/lib/python3.12/site-packages/_nubi.pth      |   1 +\n .../site-packages/nubi-0.1.0.dist-info/INSTALLER   |   1 +\n .../site-packages/nubi-0.1.0.dist-info/METADATA    |  18 ++\n .../site-packages/nubi-0.1.0.dist-info/RECORD      |   8 +\n .../site-packages/nubi-0.1.0.dist-info/REQUESTED   |   0\n .../site-packages/nubi-0.1.0.dist-info/WHEEL       |   4 +\n .../nubi-0.1.0.dist-info/direct_url.json           |   1 +\n .../nubi-0.1.0.dist-info/licenses/LICENSE          | 190 +++++++++++\n .nubi/mcp-version-flag/gates.json                  |  85 +++++\n .nubi/mcp-version-flag/result.json                 |   9 +\n .nubi/mcp-version-flag/review.json                 |  25 ++\n src/nubi/controller/sandbox.py                     |   6 +-\n src/nubi/mcp/__main__.py                           |  29 +-\n 52 files changed, 1237 insertions(+), 8 deletions(-)\n",
+      "output": " ...9e009fe1267c844e36c442e5b3dc645d5eb9865c545b81a | Bin 0 -> 1150 bytes\n ...fe1267c844e36c442e5b3dc645d5eb9865c545b81a.body | Bin 0 -> 20538 bytes\n ...94d9a943f68359da08431dab4af9f86c33962982ea21b5f | Bin 0 -> 1847 bytes\n ...943f68359da08431dab4af9f86c33962982ea21b5f.body | Bin 0 -> 6936 bytes\n ...7ea321ab056bed31a67391a50e82aea9460d349fd057276 | Bin 0 -> 1193 bytes\n ...1ab056bed31a67391a50e82aea9460d349fd057276.body | 107 +++++++\n ...caa92636d8ccfe658d420ba4ed8f67f7f4e835b214255aa | Bin 0 -> 1848 bytes\n ...636d8ccfe658d420ba4ed8f67f7f4e835b214255aa.body | Bin 0 -> 14094 bytes\n ...b9fd2d0a88b65a7d2043b2c343936491ef44dc753aa91e0 | Bin 0 -> 1864 bytes\n ...d0a88b65a7d2043b2c343936491ef44dc753aa91e0.body | Bin 0 -> 21246 bytes\n ...2b69f4692b96903e0d1df2f92839b402221a47a2ca3b5be | Bin 0 -> 1230 bytes\n ...4692b96903e0d1df2f92839b402221a47a2ca3b5be.body |  82 +++++\n ...48c17282ed7a16aa7cbf0ae7aa370d2e20d939a3292aa75 | Bin 0 -> 1165 bytes\n ...282ed7a16aa7cbf0ae7aa370d2e20d939a3292aa75.body |  79 +++++\n ...1861346a483546ee4ebbe92a83f2d3a40e917849c2eb140 | Bin 0 -> 1847 bytes\n ...46a483546ee4ebbe92a83f2d3a40e917849c2eb140.body | Bin 0 -> 7405 bytes\n ...f37c122db841d6fe4cd322bc10d1a558bb00d146b85cb9a | Bin 0 -> 1848 bytes\n ...22db841d6fe4cd322bc10d1a558bb00d146b85cb9a.body | Bin 0 -> 36977 bytes\n ...35917f171c5fe59cc8767e503c75134305eac95c88bc3f8 | Bin 0 -> 1151 bytes\n ...f171c5fe59cc8767e503c75134305eac95c88bc3f8.body |  91 ++++++\n ...c28c72166da85db3d3c34ea7bd39531944f502465cf3a50 | Bin 0 -> 1152 bytes\n ...2166da85db3d3c34ea7bd39531944f502465cf3a50.body | Bin 0 -> 55206 bytes\n ...1358ae7b47b92917f8a6af8c5acecccb52b186c45372c03 | Bin 0 -> 1124 bytes\n ...e7b47b92917f8a6af8c5acecccb52b186c45372c03.body | Bin 0 -> 76356 bytes\n ...11a267af8c06f6fa9fa74e1a06b91e221cbd34f379bb11c | Bin 0 -> 1165 bytes\n ...7af8c06f6fa9fa74e1a06b91e221cbd34f379bb11c.body | Bin 0 -> 14197 bytes\n ...43af368d3fab1e60dda223939e75dacca27a71f0478c552 | Bin 0 -> 1105 bytes\n ...68d3fab1e60dda223939e75dacca27a71f0478c552.body | Bin 0 -> 5098 bytes\n ...5b9608ced10cc1a661cb4850330552cdc6801105598d8e4 | Bin 0 -> 1195 bytes\n ...8ced10cc1a661cb4850330552cdc6801105598d8e4.body | 356 +++++++++++++++++++++\n ...0e6b78a08fee1da61557cd4bdd93a63331b9d474bca9d38 | Bin 0 -> 1150 bytes\n ...8a08fee1da61557cd4bdd93a63331b9d474bca9d38.body | Bin 0 -> 74366 bytes\n ...c1ff29feff55b10f7dee3ce79cfb8c866c278585bcbadb1 | Bin 0 -> 1847 bytes\n ...9feff55b10f7dee3ce79cfb8c866c278585bcbadb1.body | Bin 0 -> 1661 bytes\n ...164036f2cff3c9d0bb0c2b4d1d94bd0814c26b9cbe036b2 | Bin 0 -> 1850 bytes\n ...6f2cff3c9d0bb0c2b4d1d94bd0814c26b9cbe036b2.body | Bin 0 -> 32722 bytes\n ...2b9c55edcd311aeafa35cbf852ab2cc5c3f5d1a1a08e2b5 | Bin 0 -> 1193 bytes\n ...5edcd311aeafa35cbf852ab2cc5c3f5d1a1a08e2b5.body | 152 +++++++++\n ...7d708c14827daac3afc81fbb8306b73de8dd6e3f1f8ea3b |   1 +\n .local/lib/python3.12/site-packages/_nubi.pth      |   1 +\n .../site-packages/nubi-0.1.0.dist-info/INSTALLER   |   1 +\n .../site-packages/nubi-0.1.0.dist-info/METADATA    |  18 ++\n .../site-packages/nubi-0.1.0.dist-info/RECORD      |   8 +\n .../site-packages/nubi-0.1.0.dist-info/REQUESTED   |   0\n .../site-packages/nubi-0.1.0.dist-info/WHEEL       |   4 +\n .../nubi-0.1.0.dist-info/direct_url.json           |   1 +\n .../nubi-0.1.0.dist-info/licenses/LICENSE          | 190 +++++++++++\n .nubi/mcp-version-flag/gates.json                  |  85 +++++\n .nubi/mcp-version-flag/result.json                 |  60 ++++\n .nubi/mcp-version-flag/review.json                 |  25 ++\n src/nubi/controller/sandbox.py                     |   6 +-\n src/nubi/mcp/__main__.py                           |  29 +-\n tests/mcp/test_main.py                             |  66 ++++\n 53 files changed, 1354 insertions(+), 8 deletions(-)\n",
       "command": "git diff --stat origin/main..HEAD",
-      "duration_seconds": 0.014305830001831055,
+      "duration_seconds": 0.007537364959716797,
       "error": ""
     }
   ],

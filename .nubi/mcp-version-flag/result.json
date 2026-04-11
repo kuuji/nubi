@@ -1,6 +1,6 @@
 {
   "status": "success",
-  "commit_sha": "96c4ce8b51c58096957cd0089c492629b6592d63",
+  "commit_sha": "33192030b4515ffa9673241a1dff07b37379411d",
   "summary": "Task completed with all gates passing",
   "files_changed": [
     ".cache/pip/http-v2/0/e/d/3/3/0ed336d749e009fe1267c844e36c442e5b3dc645d5eb9865c545b81a",
@@ -54,7 +54,8 @@
     ".nubi/mcp-version-flag/result.json",
     ".nubi/mcp-version-flag/review.json",
     "src/nubi/controller/sandbox.py",
-    "src/nubi/mcp/__main__.py"
+    "src/nubi/mcp/__main__.py",
+    "tests/mcp/test_main.py"
   ],
   "error": ""
 }
