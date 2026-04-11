@@ -23,8 +23,10 @@ from nubi.controller.handlers import (
     on_executor_completion,
     on_job_status_change,
     on_monitor_completion,
+    on_retry_requested,
     on_reviewer_completion,
     on_taskspec_created,
+    on_taskspec_deleted,
 )
 from nubi.crd.defaults import LABEL_TASKSPEC_NAMESPACE
 from nubi.exceptions import CredentialError, NamespaceError, SandboxError
@@ -111,6 +113,7 @@ class RecordingApiClient:
 # -- Mocking targets ---------------------------------------------------------
 
 NS_MOCK = "nubi.controller.handlers.ensure_task_namespace"
+NS_DELETE_MOCK = "nubi.controller.handlers.delete_task_namespace"
 CRED_MOCK = "nubi.controller.handlers.ensure_stage_secret"
 EXEC_JOB_MOCK = "nubi.controller.handlers.create_executor_job"
 REVIEW_JOB_MOCK = "nubi.controller.handlers.create_reviewer_job"
@@ -765,6 +768,158 @@ class TestOnMonitorCompletion:
             new="processed",
         )
         assert fp.status == {}
+
+
+# -- Backward compat alias ---------------------------------------------------
+
+
+# -- on_taskspec_deleted — delete handler -------------------------------------
+
+
+class TestOnTaskSpecDeleted:
+    @patch(NS_DELETE_MOCK, new_callable=AsyncMock)
+    async def test_deletes_workspace_namespace(self, mock_delete: AsyncMock) -> None:
+        await on_taskspec_deleted(
+            name="task-1",
+            namespace="nubi-system",
+            status={"workspace": {"namespace": "nubi-task-1"}},
+        )
+        mock_delete.assert_awaited_once_with("nubi-task-1")
+
+    @patch(NS_DELETE_MOCK, new_callable=AsyncMock)
+    async def test_no_workspace_skips_cleanup(self, mock_delete: AsyncMock) -> None:
+        await on_taskspec_deleted(
+            name="task-1",
+            namespace="nubi-system",
+            status={},
+        )
+        mock_delete.assert_not_called()
+
+    @patch(NS_DELETE_MOCK, new_callable=AsyncMock)
+    async def test_empty_workspace_skips_cleanup(self, mock_delete: AsyncMock) -> None:
+        await on_taskspec_deleted(
+            name="task-1",
+            namespace="nubi-system",
+            status={"workspace": {}},
+        )
+        mock_delete.assert_not_called()
+
+
+# -- on_retry_requested — retry annotation handler ----------------------------
+
+
+class TestOnRetryRequested:
+    @patch(EXEC_JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-task-1")
+    @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
+    async def test_retry_failed_task_restarts_pipeline(
+        self, mock_cred: AsyncMock, mock_job: AsyncMock
+    ) -> None:
+        fp = FakePatch()
+        await on_retry_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={
+                "phase": "Failed",
+                "workspace": {"namespace": "nubi-task-1"},
+            },
+            patch=fp,
+            old=None,
+            new="1712345678",
+        )
+        assert fp.status.get("phase") == "Executing"
+        assert fp.status["stages"]["executor"]["status"] == "running"
+        assert fp.status["stages"]["executor"]["attempts"] == 1
+        assert fp.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] == ""
+        mock_job.assert_awaited_once()
+
+    @patch(EXEC_JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-task-1")
+    @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
+    async def test_retry_escalated_task_restarts_pipeline(
+        self, mock_cred: AsyncMock, mock_job: AsyncMock
+    ) -> None:
+        fp = FakePatch()
+        await on_retry_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={
+                "phase": "Escalated",
+                "workspace": {"namespace": "nubi-task-1"},
+            },
+            patch=fp,
+            old=None,
+            new="1712345678",
+        )
+        assert fp.status.get("phase") == "Executing"
+        mock_job.assert_awaited_once()
+
+    async def test_retry_non_terminal_phase_ignored(self) -> None:
+        fp = FakePatch()
+        await on_retry_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={"phase": "Executing"},
+            patch=fp,
+            old=None,
+            new="1712345678",
+        )
+        assert fp.status == {}
+
+    async def test_retry_empty_annotation_ignored(self) -> None:
+        fp = FakePatch()
+        await on_retry_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={"phase": "Failed"},
+            patch=fp,
+            old="old",
+            new=None,
+        )
+        assert fp.status == {}
+
+    @patch(EXEC_JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-task-1")
+    @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
+    @patch(NS_MOCK, new_callable=AsyncMock, return_value="nubi-task-1")
+    async def test_retry_creates_namespace_if_missing(
+        self, mock_ns: AsyncMock, mock_cred: AsyncMock, mock_job: AsyncMock
+    ) -> None:
+        fp = FakePatch()
+        await on_retry_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={"phase": "Failed"},
+            patch=fp,
+            old=None,
+            new="1712345678",
+        )
+        assert fp.status.get("phase") == "Executing"
+        mock_ns.assert_awaited_once()
+
+    @patch(EXEC_JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-task-1")
+    @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
+    async def test_retry_clears_all_completion_annotations(
+        self, mock_cred: AsyncMock, mock_job: AsyncMock
+    ) -> None:
+        fp = FakePatch()
+        await on_retry_requested(
+            spec=VALID_SPEC,
+            name="task-1",
+            namespace="nubi-system",
+            status={
+                "phase": "Failed",
+                "workspace": {"namespace": "nubi-task-1"},
+            },
+            patch=fp,
+            old=None,
+            new="1712345678",
+        )
+        assert fp.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] == ""
+        assert fp.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] == ""
+        assert fp.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] == ""
 
 
 # -- Backward compat alias ---------------------------------------------------
