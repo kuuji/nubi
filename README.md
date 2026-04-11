@@ -163,6 +163,8 @@ Nubi is functional but early. Here's where things stand:
 - **Integration tests** — 8 scenarios running against real k3d clusters in CI
 - **420 unit tests** passing (71% line coverage), mypy strict, ruff clean
 
+Several features in this project were dogfooded — built by Nubi itself, including the deploy manifests and MCP server (see `.nubi/` for the artifacts from those runs).
+
 ### What hasn't been tested extensively
 
 - **Multi-tenant use** — the controller works with multiple concurrent TaskSpecs, but it hasn't been stress-tested at scale
