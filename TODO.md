@@ -19,11 +19,16 @@
 ## Backlog
 - [ ] Context management — needs more research. Subagent approach solved overflow but lost error detail. Scoped gates help. Open question.
 - [x] Deploy manifests — Kustomize base, MCP Dockerfile, split monolithic deployment.yaml (PR #6, done by nubi)
-- [ ] Deploy to gitops-lab — ArgoCD Application pointing to kuuji/nubi/manifests/, cluster-specific secrets + ingress for MCP
-- [ ] Repo input normalization — `git_clone` should strip `https://github.com/` prefix if a full URL is passed instead of `owner/repo`
-- [ ] MCP create_taskspec validation — validate and normalize `inputs.repo` before creating the CR (reject or strip full URLs)
-- [ ] Controller delete handler — add `@kopf.on.delete` to clean up task namespace, jobs, and pods when a TaskSpec is deleted
-- [ ] Controller update/retry handling — add `@kopf.on.update` or retry logic so re-applying a failed TaskSpec re-runs the pipeline instead of being silently ignored
+- [x] Deploy to gitops-lab — ArgoCD Application pointing to kuuji/nubi/manifests/, cluster-specific secrets + ingress for MCP
+- [x] Repo input normalization — `git_clone` strips full GitHub URLs to `owner/repo` format
+- [x] MCP create_taskspec validation — Pydantic validator on `TaskInputs.repo` normalizes at schema level
+- [x] Controller delete handler — add `@kopf.on.delete` to clean up task namespace, jobs, and pods when a TaskSpec is deleted (PR #7)
+- [x] Controller update/retry handling — retry via `nubi.io/retry` annotation on Failed/Escalated tasks (PR #7)
+- [ ] Graceful task cancellation — ability to stop a running task via TaskSpec status/MCP without deleting the namespace, so logs and artifacts are preserved for debugging
+- [x] Smarter git_commit — `git_commit` accepts optional `files` param for selective staging; workspace excludes prevent junk from being staged
+- [x] Workspace .gitignore — uses `.git/info/exclude` (local-only, never committed) to exclude `.cache/`, `.local/`, `__pycache__/`, `.venv/`, `.nubi/`
+- [ ] Guard against destructive git operations — agent uses `run_shell` to `git reset --hard`, undoing its own work. Consider blocking destructive git commands in the shell allowlist
+- [ ] Agent pip install leaks into workspace — agent tries to install dev tools (ruff, pytest) at runtime into `.local/`, but they don't end up in PATH for the gate runner. Either pre-install dev tools in the agent image (`pip install ".[dev]"`) or make gate runner aware of `.local/bin`
 - [ ] Planner network inference — the task interview/planner should analyze the task description to determine what network access the agent will need (e.g. external APIs, package registries) and set `constraints.network_access` accordingly
 - [ ] Better CI feedback — pass actual check run output to executor on retry, don't retry on timeouts
 - [ ] Planner as MCP skill — interactive task scoping through conversation, then submit via MCP

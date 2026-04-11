@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from nubi.agents.gate_result import (  # noqa: F401
     GateCategory,
@@ -104,6 +104,13 @@ class TaskInputs(BaseModel):
     repo: str
     branch: str = Field(default=DEFAULT_BRANCH)
     files_of_interest: list[str] = Field(default_factory=list)
+
+    @field_validator("repo")
+    @classmethod
+    def normalize_repo(cls, v: str) -> str:
+        from nubi.tools.git import normalize_repo
+
+        return normalize_repo(v)
 
 
 class TaskValidation(BaseModel):

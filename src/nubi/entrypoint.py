@@ -187,11 +187,15 @@ def main() -> int:
     try:
         git_clone(repo, branch, token, workspace)
 
-        # Ensure agent-generated artifacts don't pollute the repo
-        gitignore_path = os.path.join(workspace, ".gitignore")
-        if not os.path.exists(gitignore_path):
-            with open(gitignore_path, "w") as f:
-                f.write(".cache/\n.local/\n__pycache__/\n*.pyc\n.venv/\n")
+        # Ensure agent-generated artifacts don't get staged via git add -A.
+        # Use .git/info/exclude (local-only, never committed) instead of .gitignore
+        # so we don't modify the repo's own ignore rules.
+        exclude_path = os.path.join(workspace, ".git", "info", "exclude")
+        nubi_patterns = [".cache/", ".local/", "__pycache__/", "*.pyc", ".venv/", ".nubi/"]
+        with open(exclude_path, "a") as f:
+            f.write("\n# nubi workspace excludes\n")
+            for pattern in nubi_patterns:
+                f.write(f"{pattern}\n")
 
         # Check if task branch already exists on remote (iterative refinement)
         branch_check = subprocess.run(

@@ -2,11 +2,32 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 
 from strands import tool
 
 _workspace: str = "/workspace"
+
+_GITHUB_URL_RE = re.compile(
+    r"^(?:https?://)?(?:www\.)?github\.com/(?P<owner>[^/]+)/(?P<repo>[^/\s]+?)(?:\.git)?/?$"
+)
+
+
+def normalize_repo(repo: str) -> str:
+    """Normalize a repo identifier to owner/repo format.
+
+    Accepts: 'owner/repo', 'https://github.com/owner/repo',
+    'https://github.com/owner/repo.git', etc.
+    """
+    repo = repo.strip()
+    m = _GITHUB_URL_RE.match(repo)
+    if m:
+        return f"{m.group('owner')}/{m.group('repo')}"
+    # Already in owner/repo format — validate it looks right
+    if "/" in repo and not repo.startswith(("http://", "https://")):
+        return repo.removesuffix(".git")
+    raise ValueError(f"Invalid repo format: {repo!r} — expected 'owner/repo' or a GitHub URL")
 
 
 def configure(workspace: str) -> None:
@@ -34,6 +55,7 @@ def git_clone(repo: str, branch: str, token: str, workspace: str) -> None:
 
     Not a @tool — called by the entrypoint before the agent starts.
     """
+    repo = normalize_repo(repo)
     # safe.directory is handled via GIT_CONFIG_* env vars set in the container spec.
     url = f"https://x-access-token:{token}@github.com/{repo}.git"
     result = subprocess.run(
@@ -90,13 +112,17 @@ def git_log(max_count: int = 10) -> str:
 
 
 @tool
-def git_commit(message: str) -> str:
-    """Stage all changes and create a commit.
+def git_commit(message: str, files: list[str] | None = None) -> str:
+    """Stage changes and create a commit.
 
     Args:
         message: The commit message.
+        files: Specific files/directories to stage. If omitted, stages all changes.
     """
-    _git("add", "-A")
+    if files:
+        _git("add", "--", *files)
+    else:
+        _git("add", "-A")
     return _git("commit", "-m", message)
 
 
