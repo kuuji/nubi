@@ -148,6 +148,35 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design document covering:
 | Language | Python 3.12+ |
 | CI | GitHub Actions (lint, typecheck, unit test, integration test, image build) |
 
+## Status
+
+Nubi is functional but early. Here's where things stand:
+
+### What works
+
+- **Full pipeline** — executor → gates → reviewer → monitor → PR creation has been run end-to-end against real repos with real LLMs (tested with Kimi K2 via OpenRouter)
+- **Controller state machine** — all phase transitions, retry loops, and escalation paths are implemented and tested
+- **Deterministic gates** — lint (ruff/eslint), complexity (radon), test execution (pytest/jest), and diff size checks, with auto-discovery based on changed file types
+- **Reviewer and monitor agents** — reviewer feedback loops back to executor, monitor creates PRs and polls CI checks, CI failure kicks back to executor
+- **gVisor sandboxing** — RuntimeClass, restricted PSS, shell allowlist, NetworkPolicy, no K8s API access from agent pods
+- **MCP server** — FastMCP with streamable HTTP, 5 tools (create task, list tasks, get status, get logs, get results)
+- **Integration tests** — 8 scenarios running against real k3d clusters in CI
+- **420 unit tests** passing, mypy strict, ruff clean
+
+### What hasn't been tested extensively
+
+- **Multi-tenant use** — the controller works with multiple concurrent TaskSpecs, but it hasn't been stress-tested at scale
+- **Non-Python projects** — gates auto-discover eslint/jest for Node projects, but most testing has been done with Python repos
+- **Long-running tasks** — timeout enforcement works, but edge cases around very large repos or complex multi-file changes haven't been explored
+- **Production deployment** — Kustomize manifests exist and work, but this hasn't been run in a production cluster yet
+
+### What's next
+
+- Better CI feedback — pass actual check run output to executor on retry, don't retry on timeouts
+- Langfuse integration for tracing and cost tracking
+- Planner as an MCP skill — interactive task scoping through conversation before submitting
+- See [TODO.md](TODO.md) for the full backlog
+
 ## Project Structure
 
 ```
