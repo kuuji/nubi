@@ -9,7 +9,7 @@ from typing import Any, cast
 import kopf
 
 from nubi.controller.credentials import ensure_stage_secret
-from nubi.controller.namespace import ensure_task_namespace
+from nubi.controller.namespace import delete_task_namespace, ensure_task_namespace
 from nubi.controller.results import (
     read_executor_result,
     read_gates_result,
@@ -33,6 +33,7 @@ REVIEWER_JOB_STATUS_ANNOTATION = "nubi.io/reviewer-job-completed"
 MONITOR_JOB_STATUS_ANNOTATION = "nubi.io/monitor-job-completed"
 JOB_NAME_ANNOTATION = "nubi.io/job-name"
 JOB_NAMESPACE_ANNOTATION = "nubi.io/job-namespace"
+RETRY_ANNOTATION = "nubi.io/retry"
 
 # Keep for backward compat in tests that reference it
 JOB_STATUS_ANNOTATION = EXECUTOR_JOB_STATUS_ANNOTATION
@@ -89,6 +90,26 @@ async def on_taskspec_created(
     patch.status["stages"] = {"executor": {"status": "running", "attempts": 1}}
 
     return {"message": f"TaskSpec {name} accepted, executor job {job_name} created"}
+
+
+@kopf.on.delete("taskspecs", group="nubi.io", version="v1")  # type: ignore[arg-type]
+async def on_taskspec_deleted(
+    name: str,
+    namespace: str,
+    status: dict[str, Any],
+    **kwargs: Any,
+) -> None:
+    """Clean up the task namespace (cascades to jobs and pods) when a TaskSpec is deleted."""
+    ns_name = status.get("workspace", {}).get("namespace")
+    if not ns_name:
+        logger.info(
+            "TaskSpec %s/%s has no workspace namespace, nothing to clean up", namespace, name
+        )
+        return
+
+    logger.info("TaskSpec %s/%s deleted, cleaning up namespace %s", namespace, name, ns_name)
+    await delete_task_namespace(ns_name)
+    logger.info("Namespace %s deleted for TaskSpec %s/%s", ns_name, namespace, name)
 
 
 @kopf.on.event("jobs", group="batch", version="v1", labels={"app.kubernetes.io/managed-by": "nubi"})  # type: ignore[arg-type]
@@ -825,3 +846,91 @@ async def on_monitor_completion(
             name,
             monitor.summary[:200],
         )
+
+
+@kopf.on.field(  # type: ignore[arg-type]
+    "taskspecs",
+    group="nubi.io",
+    version="v1",
+    field=("metadata", "annotations", RETRY_ANNOTATION),
+)
+async def on_retry_requested(
+    spec: dict[str, Any],
+    name: str,
+    namespace: str,
+    status: dict[str, Any],
+    patch: Any,
+    old: Any,
+    new: Any,
+    **kwargs: Any,
+) -> None:
+    """Re-run the pipeline when a retry annotation is set on a Failed/Escalated TaskSpec.
+
+    Usage: kubectl annotate taskspec <name> nubi.io/retry=$(date +%s) --overwrite
+    """
+    if not new:
+        return
+
+    current_phase = status.get("phase")
+    if current_phase not in (Phase.FAILED.value, Phase.ESCALATED.value):
+        logger.info(
+            "TaskSpec %s/%s retry requested but phase is %s (not Failed/Escalated), ignoring",
+            namespace,
+            name,
+            current_phase,
+        )
+        return
+
+    logger.info(
+        "TaskSpec %s/%s retry requested (phase=%s), re-running pipeline",
+        namespace,
+        name,
+        current_phase,
+    )
+
+    task_spec = TaskSpecSpec.model_validate(spec)
+
+    # Re-use existing namespace or create a new one
+    ns_name = status.get("workspace", {}).get("namespace")
+    if not ns_name:
+        try:
+            ns_name = await ensure_task_namespace(name, task_spec.type.value, task_spec.constraints)
+        except NamespaceError:
+            patch.status["phase"] = Phase.FAILED.value
+            patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+            raise
+
+    patch.status["phase"] = Phase.PENDING.value
+    patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+    patch.status["workspace"] = {"namespace": ns_name}
+
+    try:
+        secret_name = await ensure_stage_secret(ns_name, name, "executor")
+    except CredentialError:
+        patch.status["phase"] = Phase.FAILED.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        raise
+
+    try:
+        job_name = await create_executor_job(name, ns_name, task_spec, secret_name, namespace)
+    except SandboxError:
+        patch.status["phase"] = Phase.FAILED.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        raise
+
+    patch.status["phase"] = Phase.EXECUTING.value
+    patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+    patch.status["stages"] = {"executor": {"status": "running", "attempts": 1}}
+
+    # Clear completion annotations so the new pipeline cycle works
+    patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = ""
+    patch.meta.annotations[REVIEWER_JOB_STATUS_ANNOTATION] = ""
+    patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = ""
+
+    logger.info(
+        "TaskSpec %s/%s retried, executor job %s created in namespace %s",
+        namespace,
+        name,
+        job_name,
+        ns_name,
+    )
