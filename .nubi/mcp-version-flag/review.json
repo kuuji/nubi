@@ -1,0 +1,25 @@
+{
+  "decision": "reject",
+  "feedback": "## Code Review: nubi/mcp-version-flag\n\n### Summary\nThe changes on this branch do NOT implement the requested task.\n\n### Task Requirements\nAdd a `--version` flag to `src/nubi/mcp/__main__.py` that prints the package version and exits.\n\n### Actual Changes\nThe diff shows only:\n- `.nubi/mcp-version-flag/gates.json` - Internal Nubi CI/CD gate configuration\n- `.nubi/mcp-version-flag/result.json` - Internal Nubi CI/CD execution result\n\n**No changes were made to `src/nubi/mcp/__main__.py`.** The file remains unchanged from the base branch - it only contains the basic MCP server runner without any `--version` flag support.\n\n### Analysis\n1. **Correctness**: ❌ The changes do not implement the requested feature at all. The `--version` flag is completely missing.\n\n2. **Code Quality**: N/A - No relevant code changes were made.\n\n3. **Security**: N/A - No relevant code changes were made.\n\n4. **Completeness**: ❌ The implementation is missing entirely. The file should:\n   - Import `argparse` or use `sys.argv` to parse arguments\n   - Detect `--version` flag\n   - Import `__version__` from `nubi`\n   - Print the version and exit with `sys.exit(0)`\n\n5. **Scope**: ❌ The changes are off-scope. The only modified files are internal CI/CD configuration files (`.nubi/`) which are not related to the task.\n\n### Expected Implementation\nThe `__main__.py` file should have been modified to include something like:\n\n```python\nimport argparse\nimport sys\nfrom nubi import __version__\n\ndef main():\n    parser = argparse.ArgumentParser(prog=\"nubi-mcp\")\n    parser.add_argument(\"--version\", action=\"store_true\", help=\"Show version and exit\")\n    args = parser.parse_args()\n    \n    if args.version:\n        print(f\"nubi-mcp {__version__}\")\n        sys.exit(0)\n    \n    # ... existing server code ...\n\nif __name__ == \"__main__\":\n    main()\n```\n\n### Decision: REJECT\nThis branch fails to implement the requested feature. The diff contains only internal CI/CD configuration files with no changes to the actual source code.",
+  "summary": "Changes do not implement the requested --version flag feature - only CI/CD config files were modified, not src/nubi/mcp/__main__.py",
+  "issues": [
+    {
+      "severity": "critical",
+      "file": "src/nubi/mcp/__main__.py",
+      "line": null,
+      "description": "Task requires adding --version flag, but no changes were made to this file"
+    },
+    {
+      "severity": "major",
+      "file": ".nubi/mcp-version-flag/gates.json",
+      "line": null,
+      "description": "Off-scope: Internal CI/CD configuration file, not related to the task"
+    },
+    {
+      "severity": "major",
+      "file": ".nubi/mcp-version-flag/result.json",
+      "line": null,
+      "description": "Off-scope: Internal CI/CD configuration file, not related to the task"
+    }
+  ]
+}
