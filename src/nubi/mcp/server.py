@@ -33,7 +33,7 @@ def _get_port() -> int:
         return DEFAULT_PORT
 
 
-mcp = FastMCP(SERVER_NAME, port=_get_port())
+mcp = FastMCP(SERVER_NAME, host="0.0.0.0", port=_get_port())
 
 
 @mcp.tool()

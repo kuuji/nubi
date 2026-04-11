@@ -12,4 +12,4 @@ from __future__ import annotations
 from nubi.mcp.server import mcp
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http", host="0.0.0.0")
+    mcp.run(transport="streamable-http")
