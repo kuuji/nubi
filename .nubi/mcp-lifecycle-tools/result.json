@@ -1,0 +1,16 @@
+{
+  "status": "success",
+  "commit_sha": "11dc34b07f9efc8d47b31cb26d6b5768bf5679f8",
+  "summary": "Task completed with all gates passing",
+  "files_changed": [
+    "src/nubi/controller/handlers.py",
+    "src/nubi/crd/defaults.py",
+    "src/nubi/crd/schema.py",
+    "src/nubi/mcp/k8s.py",
+    "src/nubi/mcp/server.py",
+    "tests/mcp/test_server.py",
+    "tests/test_handlers.py",
+    "tests/test_schema.py"
+  ],
+  "error": ""
+}

@@ -1,0 +1,85 @@
+{
+  "discovered": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "applies_to": [],
+      "command": "ruff check src/ tests/"
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "applies_to": [],
+      "command": "ruff format --check src/ tests/"
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "applies_to": [],
+      "command": "mypy src/nubi/"
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "applies_to": [],
+      "command": "pytest tests/ -v"
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "applies_to": [
+        "*"
+      ],
+      "command": ""
+    }
+  ],
+  "gates": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "status": "skipped",
+      "output": "ruff not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00020122528076171875,
+      "error": ""
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "status": "skipped",
+      "output": "ruff not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00005793571472167969,
+      "error": ""
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "status": "skipped",
+      "output": "mypy not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00006842613220214844,
+      "error": ""
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "status": "skipped",
+      "output": "pytest not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00006079673767089844,
+      "error": ""
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "status": "passed",
+      "output": " src/nubi/controller/handlers.py |  54 ++++++++-\n src/nubi/crd/defaults.py        |   5 +\n src/nubi/crd/schema.py          |   1 +\n src/nubi/mcp/k8s.py             |  41 +++++++\n src/nubi/mcp/server.py          |  74 ++++++++++++\n tests/mcp/test_server.py        | 243 ++++++++++++++++++++++++++++++++++++++++\n tests/test_handlers.py          |  85 ++++++++++++++\n tests/test_schema.py            |   3 +-\n 8 files changed, 504 insertions(+), 2 deletions(-)\n",
+      "command": "git diff --stat origin/main..HEAD",
+      "duration_seconds": 0.00644993782043457,
+      "error": ""
+    }
+  ],
+  "overall_passed": true,
+  "attempt": 1
+}
