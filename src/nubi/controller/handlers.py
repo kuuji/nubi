@@ -750,7 +750,7 @@ async def on_monitor_completion(
     if monitor.ci_status:
         monitor_stage["ciStatus"] = monitor.ci_status
     if monitor.ci_feedback:
-        monitor_stage["ciFeedback"] = monitor.ci_feedback[:500]
+        monitor_stage["ciFeedback"] = monitor.ci_feedback
 
     # CI failure: kick back to executor if retries remain
     if monitor.decision == "ci-failed":
@@ -823,6 +823,20 @@ async def on_monitor_completion(
             executor_job,
             ci_retries + 1,
             max_ci_retries,
+        )
+        return
+
+    # Escalate decision → Escalated phase (needs human attention)
+    if monitor.decision == "escalate":
+        patch.status["phase"] = Phase.ESCALATED.value
+        patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
+        patch.status["stages"] = {**status.get("stages", {}), "monitor": monitor_stage}
+        patch.meta.annotations[MONITOR_JOB_STATUS_ANNOTATION] = "processed"
+        logger.warning(
+            "Task %s/%s monitor escalated: %s",
+            namespace,
+            name,
+            monitor.summary[:200],
         )
         return
 

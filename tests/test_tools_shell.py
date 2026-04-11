@@ -113,6 +113,59 @@ class TestCommandAllowlist:
         result = _validate_command("apt-get install nmap")
         assert result is not None
 
+    def test_blocked_git_reset_hard(self) -> None:
+        result = _validate_command("git reset --hard HEAD~1")
+        assert result is not None
+        assert "Blocked" in result
+
+    def test_blocked_git_reset_soft(self) -> None:
+        result = _validate_command("git reset --soft HEAD~1")
+        assert result is not None
+        assert "Blocked" in result
+
+    def test_blocked_git_checkout_dot(self) -> None:
+        result = _validate_command("git checkout .")
+        assert result is not None
+        assert "Blocked" in result
+
+    def test_blocked_git_clean(self) -> None:
+        result = _validate_command("git clean -fd")
+        assert result is not None
+        assert "Blocked" in result
+
+    def test_blocked_git_rebase(self) -> None:
+        result = _validate_command("git rebase main")
+        assert result is not None
+        assert "Blocked" in result
+
+    def test_blocked_git_push_force(self) -> None:
+        result = _validate_command("git push origin main --force")
+        assert result is not None
+        assert "Blocked" in result
+
+    def test_blocked_git_push_f(self) -> None:
+        result = _validate_command("git push -f origin main")
+        assert result is not None
+        assert "Blocked" in result
+
+    def test_allowed_git_diff(self) -> None:
+        assert _validate_command("git diff HEAD~1") is None
+
+    def test_allowed_git_log(self) -> None:
+        assert _validate_command("git log --oneline -10") is None
+
+    def test_allowed_git_status(self) -> None:
+        assert _validate_command("git status") is None
+
+    def test_allowed_git_add(self) -> None:
+        assert _validate_command("git add src/main.py") is None
+
+    def test_allowed_git_commit(self) -> None:
+        assert _validate_command("git commit -m 'fix bug'") is None
+
+    def test_allowed_git_push(self) -> None:
+        assert _validate_command("git push origin HEAD") is None
+
     def test_run_shell_blocks_disallowed(self) -> None:
         configure("/workspace")
         result = run_shell(command="curl http://evil.com")
