@@ -210,6 +210,7 @@ class TestPhaseEnum:
         "Done",
         "Failed",
         "Escalated",
+        "Cancelled",
     ]
 
     def test_all_phases_exist(self):
@@ -217,7 +218,7 @@ class TestPhaseEnum:
             assert Phase(value) == value
 
     def test_phase_count(self):
-        assert len(Phase) == 11
+        assert len(Phase) == 12
 
 
 # -- 6. Spec models are frozen -----------------------------------------------

@@ -6,6 +6,8 @@ This server provides MCP tools for managing Nubi TaskSpec resources:
 - get_task_status: Get detailed task status
 - get_task_logs: Read pod logs for a task stage
 - delete_taskspec: Delete a task
+- retry_task: Retry a Failed or Escalated task
+- cancel_task: Cancel a running task
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from typing import Annotated, Any
 from mcp.server.fastmcp import FastMCP
 from pydantic import ValidationError
 
+from nubi.crd.defaults import CANCEL_ANNOTATION, RETRY_ANNOTATION
 from nubi.crd.schema import TaskSpecSpec
 from nubi.mcp import k8s
 
@@ -222,6 +225,77 @@ def delete_taskspec(
         return f"TaskSpec '{name}' deleted successfully from namespace '{namespace}'."
     except Exception as e:
         return f"Error deleting TaskSpec: {e}"
+
+
+@mcp.tool()
+def retry_task(
+    name: Annotated[str, "TaskSpec name to retry"],
+    namespace: Annotated[str, "Namespace"] = "nubi-system",
+) -> str:
+    """Retry a Failed or Escalated task.
+
+    Sets the nubi.io/retry annotation to trigger the controller to re-run
+    the task pipeline. Only works when the task phase is Failed or Escalated.
+    """
+    try:
+        task = k8s.get_taskspec(name=name, namespace=namespace)
+    except Exception as e:
+        return f"Error getting task status: {e}"
+
+    phase = task.get("status", {}).get("phase")
+    if phase not in ("Failed", "Escalated"):
+        return f"Task '{name}' cannot be retried: phase is '{phase}', not Failed or Escalated."
+
+    import time
+
+    retry_value = str(int(time.time()))
+    try:
+        k8s.patch_taskspec_annotation(
+            name=name,
+            namespace=namespace,
+            annotation=RETRY_ANNOTATION,
+            value=retry_value,
+        )
+        return f"Task '{name}' retry requested successfully."
+    except Exception as e:
+        return f"Error retrying task: {e}"
+
+
+@mcp.tool()
+def cancel_task(
+    name: Annotated[str, "TaskSpec name to cancel"],
+    namespace: Annotated[str, "Namespace"] = "nubi-system",
+) -> str:
+    """Cancel a running task.
+
+    Sets the nubi.io/cancel annotation to stop new stage creation.
+    Running jobs will complete but no new stages will be spawned.
+    Only works when the task is not already in a terminal phase.
+    """
+    terminal_phases = ("Done", "Failed", "Escalated", "Cancelled")
+
+    try:
+        task = k8s.get_taskspec(name=name, namespace=namespace)
+    except Exception as e:
+        return f"Error getting task status: {e}"
+
+    phase = task.get("status", {}).get("phase")
+    if phase in terminal_phases:
+        return f"Task '{name}' cannot be cancelled: already in phase '{phase}'."
+
+    import time
+
+    cancel_value = str(int(time.time()))
+    try:
+        k8s.patch_taskspec_annotation(
+            name=name,
+            namespace=namespace,
+            annotation=CANCEL_ANNOTATION,
+            value=cancel_value,
+        )
+        return f"Task '{name}' cancellation requested successfully."
+    except Exception as e:
+        return f"Error cancelling task: {e}"
 
 
 if __name__ == "__main__":
