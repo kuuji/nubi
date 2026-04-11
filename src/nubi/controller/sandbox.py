@@ -90,7 +90,11 @@ def build_executor_job(
         V1EnvVar(name="NUBI_REPO", value=spec.inputs.repo),
         V1EnvVar(name="NUBI_BRANCH", value=spec.inputs.branch),
         V1EnvVar(name="NUBI_DESCRIPTION", value=spec.description),
-        V1EnvVar(name="NUBI_TOOLS", value=",".join(spec.constraints.tools)),
+        *(
+            [V1EnvVar(name="NUBI_TOOLS", value=",".join(spec.constraints.tools))]
+            if spec.constraints.tools
+            else []
+        ),
         V1EnvVar(name="NUBI_LLM_PROVIDER", value=os.environ.get("NUBI_LLM_PROVIDER", "anthropic")),
         # uid 65534 (nobody) has no home dir — point HOME to workspace for git config etc.
         V1EnvVar(name="HOME", value="/workspace"),
