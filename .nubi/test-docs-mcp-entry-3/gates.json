@@ -40,7 +40,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.00029921531677246094,
+      "duration_seconds": 0.00015115737915039062,
       "error": ""
     },
     {
@@ -49,7 +49,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.000060558319091796875,
+      "duration_seconds": 0.00006031990051269531,
       "error": ""
     },
     {
@@ -58,7 +58,7 @@
       "status": "skipped",
       "output": "mypy not found in PATH",
       "command": "",
-      "duration_seconds": 0.00008153915405273438,
+      "duration_seconds": 0.00006580352783203125,
       "error": ""
     },
     {
@@ -67,19 +67,19 @@
       "status": "skipped",
       "output": "pytest not found in PATH",
       "command": "",
-      "duration_seconds": 0.00008535385131835938,
+      "duration_seconds": 0.00006198883056640625,
       "error": ""
     },
     {
       "name": "diff_size",
       "category": "diff_size",
       "status": "passed",
-      "output": " .nubi/test-docs-mcp-entry-3/gates.json | 6 ++++++\n 1 file changed, 6 insertions(+)\n",
+      "output": " .nubi/test-docs-mcp-entry-3/gates.json  | 85 +++++++++++++++++++++++++++++++++\n .nubi/test-docs-mcp-entry-3/result.json |  9 ++++\n .nubi/test-docs-mcp-entry-3/review.json | 19 ++++++++\n 3 files changed, 113 insertions(+)\n",
       "command": "git diff --stat origin/main..HEAD",
-      "duration_seconds": 0.0031664371490478516,
+      "duration_seconds": 0.00299835205078125,
       "error": ""
     }
   ],
   "overall_passed": true,
-  "attempt": 2
+  "attempt": 1
 }
