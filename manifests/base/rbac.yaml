@@ -14,7 +14,7 @@ rules:
     verbs: ["create", "delete", "get", "list", "watch"]
   # Manage workloads inside task namespaces
   - apiGroups: [""]
-    resources: ["pods"]
+    resources: ["pods", "pods/log"]
     verbs: ["get", "list", "watch", "delete"]
   - apiGroups: ["batch"]
     resources: ["jobs"]
@@ -31,10 +31,10 @@ rules:
   - apiGroups: [""]
     resources: ["resourcequotas"]
     verbs: ["create", "get", "list", "watch", "delete"]
-  # TaskSpec CRD — read and update status
+  # TaskSpec CRD — full access (controller + MCP server share this SA)
   - apiGroups: ["nubi.io"]
     resources: ["taskspecs"]
-    verbs: ["get", "list", "watch", "patch"]
+    verbs: ["create", "delete", "get", "list", "watch", "patch"]
   - apiGroups: ["nubi.io"]
     resources: ["taskspecs/status"]
     verbs: ["get", "update", "patch"]
