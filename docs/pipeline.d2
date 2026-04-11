@@ -2,86 +2,144 @@ direction: down
 
 you: You {
   shape: person
+  style.font-size: 15
 }
 
-assistant: AI Assistant\n(MCP client)
+assistant: "AI Assistant (MCP client)" {
+  style.fill: "#e7f5ff"
+  style.stroke: "#1971c2"
+  style.border-radius: 8
+  style.font-size: 13
+}
 
 controller: Controller {
-  style.fill: "#e8f4fd"
-  style.stroke: "#2196f3"
+  style.fill: "#d0ebff"
+  style.stroke: "#1971c2"
+  style.border-radius: 8
+  style.font-size: 15
+  style.bold: true
 }
 
-you -> assistant: describes task
-assistant -> controller: TaskSpec via MCP
+you -> assistant: describes task {
+  style.font-size: 11
+  style.stroke: "#868e96"
+}
+assistant -> controller: TaskSpec via MCP {
+  style.font-size: 11
+  style.stroke: "#868e96"
+}
+controller -> pipeline.executor: sets up sandbox {
+  style.font-size: 11
+  style.stroke: "#868e96"
+}
 
-pipeline: gVisor-sandboxed Kubernetes pods {
-  style.fill: "#fafafa"
-  style.stroke: "#bdbdbd"
-  style.border-radius: 12
+pipeline: gVisor-sandboxed pods {
+  style.fill: "#f8f9fa"
+  style.stroke: "#ced4da"
+  style.border-radius: 16
+  style.font-size: 13
+  style.font-color: "#868e96"
 
-  executor: "Executor\n\nWrites code + tests\nRuns deterministic gates\n(lint · tests · complexity)" {
-    style.fill: "#fff3e0"
-    style.stroke: "#ff9800"
-    style.border-radius: 8
+  executor: "Executor\ncode + tests + gates" {
+    style.fill: "#fff4e6"
+    style.stroke: "#e8590c"
+    style.border-radius: 10
     style.font-size: 14
+    width: 190
+    height: 60
   }
 
-  reviewer: "Reviewer (read-only)\n\nCode quality · Security\nArchitecture · Test coverage" {
-    style.fill: "#e8f5e9"
-    style.stroke: "#4caf50"
-    style.border-radius: 8
+  reviewer: "Reviewer (read-only)\nquality · security · coverage" {
+    style.fill: "#ebfbee"
+    style.stroke: "#2f9e44"
+    style.border-radius: 10
     style.font-size: 14
+    width: 190
+    height: 60
   }
 
-  monitor: "Monitor\n\nAudits pipeline\nCreates PR · Polls CI" {
-    style.fill: "#f3e5f5"
-    style.stroke: "#9c27b0"
-    style.border-radius: 8
+  monitor: "Monitor\ncreates PR · polls CI" {
+    style.fill: "#f3f0ff"
+    style.stroke: "#7048e8"
+    style.border-radius: 10
     style.font-size: 14
+    width: 190
+    height: 60
   }
 
+  # Happy path: triangle clockwise
   executor -> reviewer: gates pass {
-    style.stroke: "#4caf50"
+    style.stroke: "#2f9e44"
+    style.font-size: 11
+    style.stroke-width: 2
   }
   reviewer -> monitor: approve {
-    style.stroke: "#4caf50"
+    style.stroke: "#2f9e44"
+    style.font-size: 11
+    style.stroke-width: 2
+  }
+  monitor -> executor: CI failed {
+    style.stroke-dash: 5
+    style.stroke: "#e8590c"
+    style.font-size: 10
+  }
+
+  # Review retry
+  reviewer -> executor: request changes {
+    style.stroke-dash: 5
+    style.stroke: "#e8590c"
+    style.font-size: 10
   }
 }
 
-controller -> pipeline.executor: namespace · credentials · branch
-
-done: PR created {
-  shape: oval
-  style.fill: "#c8e6c9"
-  style.stroke: "#388e3c"
-}
-
-pipeline.monitor -> done: approve {
-  style.stroke: "#4caf50"
-}
-
-escalate: Escalate to human {
-  shape: oval
-  style.fill: "#fff9c4"
-  style.stroke: "#f9a825"
-}
-
-pipeline.reviewer -> escalate: reject {
-  style.stroke-dash: 5
-  style.stroke: "#e53935"
-}
-
+# Gate retry self-loop
 pipeline.executor -> pipeline.executor: gates fail {
   style.stroke-dash: 5
-  style.stroke: "#ff9800"
+  style.stroke: "#e8590c"
+  style.font-size: 10
 }
 
-pipeline.reviewer -> pipeline.executor: request changes {
-  style.stroke-dash: 5
-  style.stroke: "#ff9800"
+# Terminal: success
+done: "PR created" {
+  shape: oval
+  style.fill: "#d3f9d8"
+  style.stroke: "#2f9e44"
+  style.font-size: 13
+  style.bold: true
+}
+pipeline.monitor -> done: approve {
+  style.stroke: "#2f9e44"
+  style.font-size: 11
+  style.stroke-width: 2
 }
 
-pipeline.monitor -> pipeline.executor: CI failed {
+# Terminal: escalate
+escalate: "Escalate to human" {
+  shape: oval
+  style.fill: "#fff9db"
+  style.stroke: "#f08c00"
+  style.font-size: 12
+}
+pipeline.reviewer -> escalate: reject {
   style.stroke-dash: 5
-  style.stroke: "#ff9800"
+  style.stroke: "#e03131"
+  style.font-size: 10
+}
+pipeline.monitor -> escalate: max retries {
+  style.stroke-dash: 5
+  style.stroke: "#e03131"
+  style.font-size: 10
+}
+
+# Terminal: flagged
+flagged: "Done (no PR)" {
+  shape: oval
+  style.fill: "#fff3e6"
+  style.stroke: "#e8590c"
+  style.font-size: 12
+}
+pipeline.monitor -> flagged: flag concerns {
+  style.stroke-dash: 5
+  style.stroke: "#e8590c"
+  style.font-size: 10
 }
