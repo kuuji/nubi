@@ -51,6 +51,18 @@ class TestNormalizeRepo:
         with pytest.raises(ValueError, match="Invalid repo format"):
             normalize_repo("https://gitlab.com/kuuji/nubi")
 
+    def test_invalid_ssh_url(self) -> None:
+        with pytest.raises(ValueError, match="Invalid repo format"):
+            normalize_repo("git@github.com:kuuji/nubi.git")
+
+    def test_invalid_multi_segment_path(self) -> None:
+        with pytest.raises(ValueError, match="Invalid repo format"):
+            normalize_repo("foo/bar/baz")
+
+    def test_invalid_multi_segment_github_url(self) -> None:
+        with pytest.raises(ValueError, match="Invalid repo format"):
+            normalize_repo("https://github.com/foo/bar/baz")
+
 
 class TestGitClone:
     @patch("nubi.tools.git.subprocess.run")

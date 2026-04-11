@@ -189,13 +189,20 @@ def main() -> int:
 
         # Ensure agent-generated artifacts don't get staged via git add -A.
         # Use .git/info/exclude (local-only, never committed) instead of .gitignore
-        # so we don't modify the repo's own ignore rules.
+        # so we don't modify the repo's own ignore rules. Guard against repeated
+        # appends across retries/iterative refinement runs.
         exclude_path = os.path.join(workspace, ".git", "info", "exclude")
+        marker = "# nubi workspace excludes"
         nubi_patterns = [".cache/", ".local/", "__pycache__/", "*.pyc", ".venv/", ".nubi/"]
-        with open(exclude_path, "a") as f:
-            f.write("\n# nubi workspace excludes\n")
-            for pattern in nubi_patterns:
-                f.write(f"{pattern}\n")
+        existing = ""
+        if os.path.exists(exclude_path):
+            with open(exclude_path) as f:
+                existing = f.read()
+        if marker not in existing:
+            with open(exclude_path, "a") as f:
+                f.write(f"\n{marker}\n")
+                for pattern in nubi_patterns:
+                    f.write(f"{pattern}\n")
 
         # Check if task branch already exists on remote (iterative refinement)
         branch_check = subprocess.run(

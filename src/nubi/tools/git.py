@@ -9,9 +9,12 @@ from strands import tool
 
 _workspace: str = "/workspace"
 
+_OWNER_REPO_SEGMENT = r"[A-Za-z0-9._-]+"
 _GITHUB_URL_RE = re.compile(
-    r"^(?:https?://)?(?:www\.)?github\.com/(?P<owner>[^/]+)/(?P<repo>[^/\s]+?)(?:\.git)?/?$"
+    rf"^(?:https?://)?(?:www\.)?github\.com/(?P<owner>{_OWNER_REPO_SEGMENT})/"
+    rf"(?P<repo>{_OWNER_REPO_SEGMENT}?)(?:\.git)?/?$"
 )
+_OWNER_REPO_RE = re.compile(rf"^(?P<owner>{_OWNER_REPO_SEGMENT})/(?P<repo>{_OWNER_REPO_SEGMENT})$")
 
 
 def normalize_repo(repo: str) -> str:
@@ -19,14 +22,18 @@ def normalize_repo(repo: str) -> str:
 
     Accepts: 'owner/repo', 'https://github.com/owner/repo',
     'https://github.com/owner/repo.git', etc.
+
+    Rejects SSH URLs, non-GitHub hosts, and anything that doesn't
+    look like a single owner/repo pair.
     """
     repo = repo.strip()
     m = _GITHUB_URL_RE.match(repo)
     if m:
         return f"{m.group('owner')}/{m.group('repo')}"
-    # Already in owner/repo format — validate it looks right
-    if "/" in repo and not repo.startswith(("http://", "https://")):
-        return repo.removesuffix(".git")
+    # Bare owner/repo form — allow an optional .git suffix.
+    bare = repo.removesuffix(".git")
+    if _OWNER_REPO_RE.match(bare):
+        return bare
     raise ValueError(f"Invalid repo format: {repo!r} — expected 'owner/repo' or a GitHub URL")
 
 
