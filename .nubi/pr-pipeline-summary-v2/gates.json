@@ -40,7 +40,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.0003008842468261719,
+      "duration_seconds": 0.00015544891357421875,
       "error": ""
     },
     {
@@ -49,7 +49,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.00006937980651855469,
+      "duration_seconds": 0.00006031990051269531,
       "error": ""
     },
     {
@@ -58,7 +58,7 @@
       "status": "skipped",
       "output": "mypy not found in PATH",
       "command": "",
-      "duration_seconds": 0.00013208389282226562,
+      "duration_seconds": 0.00006437301635742188,
       "error": ""
     },
     {
@@ -67,16 +67,16 @@
       "status": "skipped",
       "output": "pytest not found in PATH",
       "command": "",
-      "duration_seconds": 0.0029087066650390625,
+      "duration_seconds": 0.00006031990051269531,
       "error": ""
     },
     {
       "name": "diff_size",
       "category": "diff_size",
       "status": "passed",
-      "output": " src/nubi/monitor_entrypoint.py |  12 ++\n src/nubi/tools/github_api.py   | 367 +++++++++++++++++++++++++++++++++++++++++\n tests/tools/test_github_api.py | 297 +++++++++++++++++++++++++++++++++\n 3 files changed, 676 insertions(+)\n",
+      "output": " .nubi/pr-pipeline-summary-v2/gates.json  |  85 +++++++\n .nubi/pr-pipeline-summary-v2/result.json |  11 +\n .nubi/pr-pipeline-summary-v2/review.json |  31 +++\n src/nubi/monitor_entrypoint.py           |  12 +\n src/nubi/tools/github_api.py             | 389 +++++++++++++++++++++++++++++\n tests/tools/test_github_api.py           | 416 +++++++++++++++++++++++++++++++\n 6 files changed, 944 insertions(+)\n",
       "command": "git diff --stat origin/main..HEAD",
-      "duration_seconds": 0.005819559097290039,
+      "duration_seconds": 0.004648447036743164,
       "error": ""
     }
   ],
