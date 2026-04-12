@@ -246,17 +246,25 @@ def main() -> int:
             text=True,
         )
         if rebase.returncode != 0:
-            logger.warning(
-                "Rebase on %s failed, aborting rebase: %s",
-                branch,
-                rebase.stderr.strip(),
-            )
+            # Rebase failed (conflicts) — abort and fall back to merge.
+            # If merge also conflicts, leave markers for the agent to resolve.
             subprocess.run(
                 ["git", "rebase", "--abort"],
                 cwd=workspace,
                 capture_output=True,
                 text=True,
             )
+            merge = subprocess.run(
+                ["git", "merge", f"origin/{branch}", "--no-edit"],
+                cwd=workspace,
+                capture_output=True,
+                text=True,
+            )
+            if merge.returncode != 0:
+                logger.warning(
+                    "Merge conflicts with %s — agent will need to resolve them",
+                    branch,
+                )
 
         allowed_tools = [t.strip() for t in tools_csv.split(",") if t.strip()]
         tools = get_tools(allowed_tools, workspace)
