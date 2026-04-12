@@ -77,6 +77,7 @@ class TestMarkPrReady:
 
         mark_pr_ready("https://github.com/kuuji/nubi/pull/42")
 
+        mock_get.assert_called_once()
         mock_post.assert_not_called()
 
     @patch("nubi.tools.github_api.httpx.post")
@@ -259,45 +260,100 @@ class TestFormatPipelineSummary:
         assert "❌ Ci Failed" in md
         assert "❌ Failure" in md
 
+    def test_monitor_ci_feedback_displayed(self) -> None:
+        """CI feedback from monitor data is rendered in the monitor section."""
+        monitor_data = {
+            "decision": "ci-failed",
+            "ci_status": "failure",
+            "ci_feedback": "### ruff\n3 errors\n### pytest\n2 failed",
+        }
+        md = format_pipeline_summary(
+            task_id="task-abc",
+            task_branch="nubi/task-abc",
+            result_data={"status": "success"},
+            gates_data=None,
+            review_data=None,
+            monitor_data=monitor_data,
+        )
+
+        assert "### Monitor" in md
+        assert "CI Feedback" in md
+        assert "### ruff" in md
+        assert "3 errors" in md
+
+    def test_executor_success_has_emoji(self) -> None:
+        """Successful executor status shows '✅ Complete', not plain 'success'."""
+        md = format_pipeline_summary(
+            task_id="task-abc",
+            task_branch="nubi/task-abc",
+            result_data={"status": "success"},
+            gates_data=None,
+            review_data=None,
+            monitor_data=None,
+        )
+
+        assert "✅ Complete" in md
+        assert "❌ Failed" in md  # ensure both branches are exercised in tests
+
+    def test_executor_failed_has_emoji(self) -> None:
+        """Failed executor status shows '❌ Failed'."""
+        md = format_pipeline_summary(
+            task_id="task-abc",
+            task_branch="nubi/task-abc",
+            result_data={"status": "failed"},
+            gates_data=None,
+            review_data=None,
+            monitor_data=None,
+        )
+
+        assert "❌ Failed" in md
+
 
 class TestPostPipelineSummary:
     """Tests for post_pipeline_summary — mocks GitHub API calls."""
 
     @patch("nubi.tools.github_api.httpx.post")
-    @patch("nubi.tools.github_api._find_existing_pipeline_comment")
     @patch("nubi.tools.github_api._read_artifact_json")
     def test_posts_new_comment(
         self,
         mock_read: MagicMock,
-        mock_find: MagicMock,
         mock_post: MagicMock,
     ) -> None:
+        """post_pipeline_summary calls POST /issues/{pr}/comments with correct body."""
         mock_read.side_effect = [
             {"status": "success", "commit_sha": "abc123", "attempt": 1, "files_changed": []},
             None,
             None,
             None,
         ]
-        mock_find.return_value = None
         mock_post.return_value = MagicMock(status_code=201, json=lambda: {})
 
-        result = format_pipeline_summary(
-            task_id="my-task",
-            task_branch="nubi/my-task",
-            result_data={"status": "success"},
-            gates_data=None,
-            review_data=None,
-            monitor_data=None,
+        from nubi.tools.github_api import post_pipeline_summary
+
+        rv = post_pipeline_summary(
+            pr_url="https://github.com/kuuji/nubi/pull/42",
+            repo="kuuji/nubi",
+            branch="nubi/my-task",
+            token="tok123",
         )
-        assert "## Nubi Pipeline Summary" in result
+
+        assert rv == "Pipeline summary posted"
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert "/issues/42/comments" in call_args[0][0]
+        body = call_args[1]["json"]["body"]
+        assert "<!-- nubi-pipeline-summary -->" in body
+        assert "## Nubi Pipeline Summary" in body
+        # Verifies the executor status rendered with emoji (not plain "success")
+        assert "✅ Complete" in body
 
     @patch("nubi.tools.github_api.httpx.patch")
-    @patch("nubi.tools.github_api._find_existing_pipeline_comment")
+    @patch("nubi.tools.github_api.httpx.get")
     @patch("nubi.tools.github_api._read_artifact_json")
     def test_updates_existing_comment(
         self,
         mock_read: MagicMock,
-        mock_find: MagicMock,
+        mock_get: MagicMock,
         mock_patch: MagicMock,
     ) -> None:
         """When an existing comment with the marker is found, it is updated via PATCH."""
@@ -307,7 +363,15 @@ class TestPostPipelineSummary:
             None,
             None,
         ]
-        mock_find.return_value = 123456  # existing comment ID
+        # Existing comment with marker
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: [
+                {"id": 999, "body": "stale comment without marker"},
+                {"id": 123456, "body": "<!-- nubi-pipeline-summary -->\n\nold body"},
+                {"id": 998, "body": "another comment"},
+            ],
+        )
         mock_patch.return_value = MagicMock(status_code=200)
 
         from nubi.tools.github_api import post_pipeline_summary
@@ -326,12 +390,12 @@ class TestPostPipelineSummary:
         assert "<!-- nubi-pipeline-summary -->" in call_args[1]["json"]["body"]
 
     @patch("nubi.tools.github_api.httpx.post")
-    @patch("nubi.tools.github_api._find_existing_pipeline_comment")
+    @patch("nubi.tools.github_api.httpx.get")
     @patch("nubi.tools.github_api._read_artifact_json")
     def test_posts_new_when_no_existing(
         self,
         mock_read: MagicMock,
-        mock_find: MagicMock,
+        mock_get: MagicMock,
         mock_post: MagicMock,
     ) -> None:
         """When no existing comment is found, a new one is posted."""
@@ -341,7 +405,8 @@ class TestPostPipelineSummary:
             None,
             None,
         ]
-        mock_find.return_value = None
+        # No comments on the PR
+        mock_get.return_value = MagicMock(status_code=200, json=lambda: [])
         mock_post.return_value = MagicMock(status_code=201, json=lambda: {})
 
         from nubi.tools.github_api import post_pipeline_summary
@@ -362,12 +427,10 @@ class TestPostPipelineSummary:
         assert "## Nubi Pipeline Summary" in body
 
     @patch("nubi.tools.github_api.httpx.post")
-    @patch("nubi.tools.github_api._find_existing_pipeline_comment")
     @patch("nubi.tools.github_api._read_artifact_json")
     def test_handles_invalid_pr_url(
         self,
         mock_read: MagicMock,
-        mock_find: MagicMock,
         mock_post: MagicMock,
     ) -> None:
         """Invalid PR URL returns an error instead of crashing."""
@@ -382,3 +445,59 @@ class TestPostPipelineSummary:
 
         assert "Error" in rv
         mock_post.assert_not_called()
+
+
+class TestFindExistingPipelineComment:
+    """Direct tests for _find_existing_pipeline_comment."""
+
+    @patch("nubi.tools.github_api.httpx.get")
+    def test_returns_comment_id_when_marker_found(self, mock_get: MagicMock) -> None:
+        """Returns comment ID when a comment contains the marker."""
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: [
+                {"id": 100, "body": "some text"},
+                {"id": 200, "body": "<!-- nubi-pipeline-summary -->\n\nold body"},
+            ],
+        )
+
+        from nubi.tools.github_api import _find_existing_pipeline_comment
+
+        rv = _find_existing_pipeline_comment(42, "<!-- nubi-pipeline-summary -->", "kuuji/nubi")
+        assert rv == 200
+
+    @patch("nubi.tools.github_api.httpx.get")
+    def test_returns_none_when_no_matching_comment(self, mock_get: MagicMock) -> None:
+        """Returns None when no comment contains the marker."""
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: [
+                {"id": 100, "body": "some text"},
+                {"id": 200, "body": "another comment"},
+            ],
+        )
+
+        from nubi.tools.github_api import _find_existing_pipeline_comment
+
+        rv = _find_existing_pipeline_comment(42, "<!-- nubi-pipeline-summary -->", "kuuji/nubi")
+        assert rv is None
+
+    @patch("nubi.tools.github_api.httpx.get")
+    def test_returns_none_on_empty_comment_list(self, mock_get: MagicMock) -> None:
+        """Returns None when the PR has no comments."""
+        mock_get.return_value = MagicMock(status_code=200, json=lambda: [])
+
+        from nubi.tools.github_api import _find_existing_pipeline_comment
+
+        rv = _find_existing_pipeline_comment(42, "<!-- nubi-pipeline-summary -->", "kuuji/nubi")
+        assert rv is None
+
+    @patch("nubi.tools.github_api.httpx.get")
+    def test_returns_none_on_api_error(self, mock_get: MagicMock) -> None:
+        """Returns None when GitHub API returns non-200 status."""
+        mock_get.return_value = MagicMock(status_code=500, text="Internal Server Error")
+
+        from nubi.tools.github_api import _find_existing_pipeline_comment
+
+        rv = _find_existing_pipeline_comment(42, "<!-- nubi-pipeline-summary -->", "kuuji/nubi")
+        assert rv is None

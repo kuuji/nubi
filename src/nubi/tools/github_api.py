@@ -421,7 +421,11 @@ def format_pipeline_summary(
     if result_data is None:
         lines.append("| | |\n|---|---|\n| Status | ⚠️ No artifact |\n")
     else:
-        status = "success" if result_data.get("status") == "success" else "❌ Failed"
+        status = (
+            "✅ Complete"
+            if result_data.get("status") == "success"
+            else "❌ Failed"
+        )
         commit = result_data.get("commit_sha", "")[:8]
         summary_text = result_data.get("summary", "")
         attempt = result_data.get("attempt", 1)
@@ -552,6 +556,7 @@ def format_pipeline_summary(
     else:
         decision = monitor_data.get("decision", "unknown")
         ci_status = monitor_data.get("ci_status", "")
+        ci_feedback = monitor_data.get("ci_feedback", "")
 
         if decision == "approve":
             icon = "✅"
@@ -573,6 +578,13 @@ def format_pipeline_summary(
             else:
                 ci_icon = "⚠️"
             lines.append(f"| CI Status | {ci_icon} {ci_status.replace('_', ' ').title()} |\n")
+
+        if ci_feedback:
+            # Truncate CI feedback for table display
+            fb_short = ci_feedback[:200]
+            if len(ci_feedback) > 200:
+                fb_short += "..."
+            lines.append(f"| CI Feedback | {fb_short} |\n")
 
     # Footer
     lines.append(
@@ -685,7 +697,7 @@ def post_pipeline_summary(
             return f"Error: Could not extract PR number from {pr_url}"
 
         # Check for an existing comment with our marker
-        existing = _find_existing_pipeline_comment(pr_number, marker)
+        existing = _find_existing_pipeline_comment(pr_number, marker, repo)
         if existing:
             # Update existing comment
             comment_url = f"{GITHUB_API_BASE}/repos/{_repo}/issues/comments/{existing}"
@@ -721,13 +733,23 @@ def post_pipeline_summary(
         )
 
 
-def _find_existing_pipeline_comment(pr_number: int, marker: str) -> int | None:
+def _find_existing_pipeline_comment(pr_number: int, marker: str, repo: str) -> int | None:
     """Find a PR comment containing the given HTML marker.
 
-    Returns the comment ID if found, otherwise None.
+    Args:
+        pr_number: The PR number.
+        marker: The HTML marker string to search for in comment bodies.
+        repo: Repository in "owner/name" format.
+
+    Returns:
+        The comment ID if found, otherwise None.
     """
-    url = f"{GITHUB_API_BASE}/repos/{_repo}/issues/{pr_number}/comments"
-    resp = httpx.get(url, headers=_headers(), params={"per_page": 100}, timeout=30)
+    headers = {
+        "Authorization": f"Bearer {_token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    url = f"{GITHUB_API_BASE}/repos/{repo}/issues/{pr_number}/comments"
+    resp = httpx.get(url, headers=headers, params={"per_page": 100}, timeout=30)
     if resp.status_code != 200:
         return None
 
