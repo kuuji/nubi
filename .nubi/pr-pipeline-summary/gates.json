@@ -1,0 +1,85 @@
+{
+  "discovered": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "applies_to": [],
+      "command": "ruff check src/ tests/"
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "applies_to": [],
+      "command": "ruff format --check src/ tests/"
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "applies_to": [],
+      "command": "mypy src/nubi/"
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "applies_to": [],
+      "command": "pytest tests/ -v"
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "applies_to": [
+        "*"
+      ],
+      "command": ""
+    }
+  ],
+  "gates": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "status": "skipped",
+      "output": "ruff not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00016951560974121094,
+      "error": ""
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "status": "skipped",
+      "output": "ruff not found in PATH",
+      "command": "",
+      "duration_seconds": 0.000056743621826171875,
+      "error": ""
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "status": "skipped",
+      "output": "mypy not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00006604194641113281,
+      "error": ""
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "status": "skipped",
+      "output": "pytest not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00004649162292480469,
+      "error": ""
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "status": "passed",
+      "output": " ...5dded4b84aacb1d96c1e64704669d6bab658dcaeab79c36 |  Bin 0 -> 1847 bytes\n ...4b84aacb1d96c1e64704669d6bab658dcaeab79c36.body |  Bin 0 -> 2460 bytes\n ...767991766d9b365a4f3e4449ce3579fd8b0f96a707d5a52 |  Bin 0 -> 1863 bytes\n ...1766d9b365a4f3e4449ce3579fd8b0f96a707d5a52.body |  Bin 0 -> 46257 bytes\n ...91f05c16794a4e2c6c63bcb459c017712a63fb22148cd22 |  Bin 0 -> 1150 bytes\n ...c16794a4e2c6c63bcb459c017712a63fb22148cd22.body |  Bin 0 -> 7484 bytes\n ...9e009fe1267c844e36c442e5b3dc645d5eb9865c545b81a |  Bin 0 -> 1150 bytes\n ...fe1267c844e36c442e5b3dc645d5eb9865c545b81a.body |  Bin 0 -> 20538 bytes\n ...b9737e982606b959f560390acb7a6941fb2438f5758d3ec |  Bin 0 -> 1197 bytes\n ...e982606b959f560390acb7a6941fb2438f5758d3ec.body |   79 +\n ...94d9a943f68359da08431dab4af9f86c33962982ea21b5f |  Bin 0 -> 1847 bytes\n ...943f68359da08431dab4af9f86c33962982ea21b5f.body |  Bin 0 -> 6936 bytes\n ...1de475b66523ed8787778ecb338ae8dc64c39f7ffe2cdf7 |  Bin 0 -> 1178 bytes\n ...5b66523ed8787778ecb338ae8dc64c39f7ffe2cdf7.body |  Bin 0 -> 375249 bytes\n ...d51e99ff2749a7f9b8d28ec4445a5014e6c82a9ff8c7eb1 |  Bin 0 -> 1190 bytes\n ...9ff2749a7f9b8d28ec4445a5014e6c82a9ff8c7eb1.body |  212 +\n ...adbbedc17081d3adb59405d26dce76f23c71b80e3867eab |  Bin 0 -> 1161 bytes\n ...dc17081d3adb59405d26dce76f23c71b80e3867eab.body |  593 +++\n ...357efe8e015c621695508a39823691e4777c7d90558ec8b |  Bin 0 -> 1865 bytes\n ...e8e015c621695508a39823691e4777c7d90558ec8b.body |  Bin 0 -> 749663 bytes\n ...0c5007f8e0ef36b73b2bdb8cbe7d9c8be102fd7d4efaf35 |  Bin 0 -> 1151 bytes\n ...7f8e0ef36b73b2bdb8cbe7d9c8be102fd7d4efaf35.body |  Bin 0 -> 1231151 bytes\n ...b3fb99ec006f4d173aad55224eb063005c662c586ba0518 |  Bin 0 -> 1863 bytes\n ...9ec006f4d173aad55224eb063005c662c586ba0518.body |  Bin 0 -> 22576 bytes\n ...f37c122db841d6fe4cd322bc10d1a558bb00d146b85cb9a |  Bin 0 -> 1847 bytes\n ...22db841d6fe4cd322bc10d1a558bb00d146b85cb9a.body |  Bin 0 -> 36977 bytes\n ...33cff42628675a7261d15e9515321e4dd2a55d659b886b2 |  Bin 0 -> 1119 bytes\n ...42628675a7261d15e9515321e4dd2a55d659b886b2.body |  Bin 0 -> 11256418 bytes\n ...9a8549867c7c0c30dcdda927be8994b07f4c933db9a04ab |  Bin 0 -> 1196 bytes\n ...9867c7c0c30dcdda927be8994b07f4c933db9a04ab.body |   57 +\n ...2b9c55edcd311aeafa35cbf852ab2cc5c3f5d1a1a08e2b5 |  Bin 0 -> 1193 bytes\n ...5edcd311aeafa35cbf852ab2cc5c3f5d1a1a08e2b5.body |  152 +\n ...7d708c14827daac3afc81fbb8306b73de8dd6e3f1f8ea3b |    1 +\n .local/bin/py.test                                 |    6 +\n .local/bin/pygmentize                              |    6 +\n .local/bin/pytest                                  |    6 +\n .local/bin/ruff                                    |  Bin 0 -> 27626592 bytes\n .../python3.12/site-packages/_pytest/__init__.py   |   13 +\n .../site-packages/_pytest/_argcomplete.py          |  117 +\n .../site-packages/_pytest/_code/__init__.py        |   26 +\n .../python3.12/site-packages/_pytest/_code/code.py | 1571 ++++++\n .../site-packages/_pytest/_code/source.py          |  225 +\n .../site-packages/_pytest/_io/__init__.py          |   10 +\n .../python3.12/site-packages/_pytest/_io/pprint.py |  673 +++\n .../site-packages/_pytest/_io/saferepr.py          |  130 +\n .../site-packages/_pytest/_io/terminalwriter.py    |  258 +\n .../site-packages/_pytest/_io/wcwidth.py           |   57 +\n .../site-packages/_pytest/_py/__init__.py          |    0\n .../python3.12/site-packages/_pytest/_py/error.py  |  119 +\n .../python3.12/site-packages/_pytest/_py/path.py   | 1475 ++++++\n .../python3.12/site-packages/_pytest/_version.py   |   24 +\n .../site-packages/_pytest/assertion/__init__.py    |  208 +\n .../site-packages/_pytest/assertion/rewrite.py     | 1202 +++++\n .../site-packages/_pytest/assertion/truncate.py    |  137 +\n .../site-packages/_pytest/assertion/util.py        |  615 +++\n .../site-packages/_pytest/cacheprovider.py         |  646 +++\n .../python3.12/site-packages/_pytest/capture.py    | 1144 +++++\n .../lib/python3.12/site-packages/_pytest/compat.py |  314 ++\n .../site-packages/_pytest/config/__init__.py       | 2203 ++++++++\n .../site-packages/_pytest/config/argparsing.py     |  578 +++\n .../site-packages/_pytest/config/compat.py         |   85 +\n .../site-packages/_pytest/config/exceptions.py     |   15 +\n .../site-packages/_pytest/config/findpaths.py      |  350 ++\n .../python3.12/site-packages/_pytest/debugging.py  |  407 ++\n .../python3.12/site-packages/_pytest/deprecated.py |   99 +\n .../python3.12/site-packages/_pytest/doctest.py    |  736 +++\n .../site-packages/_pytest/faulthandler.py          |  119 +\n .../python3.12/site-packages/_pytest/fixtures.py   | 2047 ++++++++\n .../site-packages/_pytest/freeze_support.py        |   45 +\n .../python3.12/site-packages/_pytest/helpconfig.py |  293 ++\n .../python3.12/site-packages/_pytest/hookspec.py   | 1342 +++++\n .../python3.12/site-packages/_pytest/junitxml.py   |  695 +++\n .../python3.12/site-packages/_pytest/legacypath.py |  468 ++\n .../python3.12/site-packages/_pytest/logging.py    |  960 ++++\n .../lib/python3.12\n[truncated - 26669 characters omitted]",
+      "command": "git diff --stat origin/main..HEAD",
+      "duration_seconds": 0.36737823486328125,
+      "error": ""
+    }
+  ],
+  "overall_passed": true,
+  "attempt": 1
+}
