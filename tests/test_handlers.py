@@ -857,9 +857,11 @@ class TestOnRetryRequested:
         )
         assert fp.status.get("phase") == "Executing"
         assert fp.status["stages"]["executor"]["status"] == "running"
-        assert fp.status["stages"]["executor"]["attempts"] == 1
+        assert fp.status["stages"]["executor"]["attempts"] == 2
         assert fp.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] == ""
         mock_job.assert_awaited_once()
+        _, kwargs = mock_job.call_args
+        assert kwargs.get("attempt") == 2
 
     @patch(EXEC_JOB_MOCK, new_callable=AsyncMock, return_value="nubi-executor-task-1")
     @patch(CRED_MOCK, new_callable=AsyncMock, return_value="nubi-executor-credentials")
