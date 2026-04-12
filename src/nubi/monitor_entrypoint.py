@@ -159,6 +159,10 @@ def main() -> int:
                     ci_feedback=ci_feedback,
                 )
 
+            # Re-update PR body with final decision and CI results
+            pr_body = _build_pr_body(description, audit)
+            update_pr_from_url(pr_url, pr_title, pr_body)
+
         # Write result to branch
         write_monitor_result_to_branch(audit)
 
@@ -178,6 +182,17 @@ def _build_pr_body(description: str, audit: MonitorResult) -> str:
     """Build the PR description body."""
     lines: list[str] = []
 
+    # Decision badge
+    decision_labels = {
+        "approve": "Approved",
+        "flag": "Flagged",
+        "ci-failed": "CI Failed",
+        "escalate": "Escalated",
+    }
+    label = decision_labels.get(audit.decision.value, audit.decision.value)
+    lines.append(f"> **Pipeline decision:** {label}")
+    lines.append("")
+
     # Use the monitor's rich PR summary if available, otherwise fall back
     if audit.pr_summary:
         pr_text = audit.pr_summary.strip()
@@ -191,6 +206,9 @@ def _build_pr_body(description: str, audit: MonitorResult) -> str:
         lines.extend(["", "## Concerns"])
         for c in audit.concerns:
             lines.append(f"- **[{c.severity}/{c.area}]** {c.description}")
+
+    if audit.ci_feedback:
+        lines.extend(["", "## CI Feedback", audit.ci_feedback])
 
     lines.extend(
         [
