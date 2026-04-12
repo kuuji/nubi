@@ -926,8 +926,13 @@ async def on_retry_requested(
         patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
         raise
 
+    prev_attempts = status.get("stages", {}).get("executor", {}).get("attempts", 1)
+    attempt = prev_attempts + 1
+
     try:
-        job_name = await create_executor_job(name, ns_name, task_spec, secret_name, namespace)
+        job_name = await create_executor_job(
+            name, ns_name, task_spec, secret_name, namespace, attempt=attempt
+        )
     except SandboxError:
         patch.status["phase"] = Phase.FAILED.value
         patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
@@ -935,7 +940,7 @@ async def on_retry_requested(
 
     patch.status["phase"] = Phase.EXECUTING.value
     patch.status["phaseChangedAt"] = datetime.now(tz=UTC).isoformat()
-    patch.status["stages"] = {"executor": {"status": "running", "attempts": 1}}
+    patch.status["stages"] = {"executor": {"status": "running", "attempts": attempt}}
 
     # Clear completion annotations so the new pipeline cycle works
     patch.meta.annotations[EXECUTOR_JOB_STATUS_ANNOTATION] = ""

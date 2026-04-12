@@ -239,6 +239,7 @@ spec:
                     - Done
                     - Failed
                     - Escalated
+                    - Cancelled
                   default: Pending
                 phaseChangedAt:
                   type: string
