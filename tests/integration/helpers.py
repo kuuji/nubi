@@ -108,6 +108,22 @@ async def delete_namespace(name: str) -> None:
             raise
 
 
+async def patch_taskspec_annotation(name: str, annotation: str, value: str) -> None:
+    """Patch a TaskSpec with an annotation (JSON merge patch)."""
+    api = CustomObjectsApi()
+    body = {"metadata": {"annotations": {annotation: value}}}
+    await api.patch_namespaced_custom_object(
+        group=GROUP,
+        version=VERSION,
+        namespace=TASKSPEC_NAMESPACE,
+        plural=PLURAL,
+        name=name,
+        body=body,
+        _content_type="application/merge-patch+json",
+    )
+    logger.info("Patched TaskSpec %s annotation %s=%s", name, annotation, value)
+
+
 async def get_taskspec_status(name: str) -> dict[str, Any]:
     """Read the current status of a TaskSpec."""
     api = CustomObjectsApi()

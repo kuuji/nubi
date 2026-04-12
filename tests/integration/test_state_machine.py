@@ -16,7 +16,13 @@ from nubi.agents.gate_result import GateCategory, GateResult, GatesResult, GateS
 from nubi.agents.monitor_result import MonitorConcern, MonitorDecision, MonitorResult
 from nubi.agents.result import ExecutorResult
 from nubi.agents.review_result import ReviewDecision, ReviewResult
-from tests.integration.helpers import await_phase, create_taskspec, get_taskspec_status
+from nubi.crd.defaults import CANCEL_ANNOTATION, RETRY_ANNOTATION
+from tests.integration.helpers import (
+    await_phase,
+    create_taskspec,
+    get_taskspec_status,
+    patch_taskspec_annotation,
+)
 from tests.integration.scenario_store import ScenarioResultStore
 
 pytestmark = pytest.mark.integration
@@ -281,3 +287,107 @@ class TestMonitorDisabled:
             "monitor" not in status.get("stages", {})
             or status["stages"].get("monitor", {}).get("status", "pending") == "pending"
         )
+
+
+class TestRetryFailedTask:
+    """Scenario 10: executor fails → Failed → retry annotation → re-runs → Done."""
+
+    async def test_failed_then_retry_succeeds(
+        self,
+        task_name: str,
+        scenario_store: ScenarioResultStore,
+    ) -> None:
+        # Attempt 1: no results registered → executor read fails → Failed
+        await create_taskspec(task_name, review_enabled=False)
+        phase = await await_phase(task_name, "Failed", timeout=30)
+        assert phase == "Failed"
+
+        # Register passing results for the retry attempt
+        scenario_store.set_executor_result(task_name, _ok_executor("retry-sha"))
+        scenario_store.set_gates_result(task_name, _ok_gates())
+
+        # Trigger retry via annotation
+        import time
+
+        await patch_taskspec_annotation(task_name, RETRY_ANNOTATION, str(int(time.time())))
+        phase = await await_phase(task_name, "Done", timeout=60)
+
+        assert phase == "Done"
+        status = await get_taskspec_status(task_name)
+        assert status["stages"]["executor"]["status"] == "complete"
+
+
+class TestRetryEscalatedTask:
+    """Scenario 11: gate fail → Escalated → retry → succeeds → Done."""
+
+    async def test_escalated_then_retry_succeeds(
+        self,
+        task_name: str,
+        scenario_store: ScenarioResultStore,
+    ) -> None:
+        # Attempt 1: gates fail, max_retries=1 → Escalated
+        scenario_store.set_executor_result(task_name, _ok_executor())
+        scenario_store.set_gates_result(task_name, _failed_gates(attempt=1))
+
+        await create_taskspec(task_name, review_enabled=False, max_retries=1)
+        phase = await await_phase(task_name, "Escalated", timeout=30)
+        assert phase == "Escalated"
+
+        # Register passing results for retry
+        scenario_store.set_executor_result(task_name, _ok_executor("retry-sha"))
+        scenario_store.set_gates_result(task_name, _ok_gates())
+
+        import time
+
+        await patch_taskspec_annotation(task_name, RETRY_ANNOTATION, str(int(time.time())))
+        phase = await await_phase(task_name, "Done", timeout=60)
+
+        assert phase == "Done"
+
+
+class TestCancelRunningTask:
+    """Scenario 12: task executing → cancel annotation → Cancelled."""
+
+    async def test_cancel_stops_pipeline(
+        self,
+        task_name: str,
+        scenario_store: ScenarioResultStore,
+    ) -> None:
+        # Don't register results — executor will be "running" when we cancel
+        await create_taskspec(task_name, review_enabled=True)
+        phase = await await_phase(task_name, "Executing", timeout=15)
+        assert phase == "Executing"
+
+        import time
+
+        await patch_taskspec_annotation(task_name, CANCEL_ANNOTATION, str(int(time.time())))
+        phase = await await_phase(task_name, "Cancelled", timeout=15)
+
+        assert phase == "Cancelled"
+
+
+class TestCancelTerminalTaskIgnored:
+    """Scenario 13: completed task → cancel annotation → stays Done."""
+
+    async def test_cancel_done_task_stays_done(
+        self,
+        task_name: str,
+        scenario_store: ScenarioResultStore,
+    ) -> None:
+        scenario_store.set_executor_result(task_name, _ok_executor())
+        scenario_store.set_gates_result(task_name, _ok_gates())
+
+        await create_taskspec(task_name, review_enabled=False)
+        phase = await await_phase(task_name, "Done", timeout=30)
+        assert phase == "Done"
+
+        import time
+
+        await patch_taskspec_annotation(task_name, CANCEL_ANNOTATION, str(int(time.time())))
+
+        # Wait briefly, verify phase hasn't changed
+        import asyncio
+
+        await asyncio.sleep(2)
+        phase = await get_taskspec_status(task_name)
+        assert phase.get("phase") == "Done"
