@@ -38,7 +38,7 @@
 - [ ] Langfuse integration — tracing, cost tracking, observability
 
 ## Ideas
-- GitHub widget for `.nubi/` artifacts — render the JSON (result.json, gates.json, review.json, monitor.json) into a human-readable format, viewable directly in the GitHub UI (GitHub Action summary, PR comment, or a dedicated viewer)
+- PR pipeline summary comment — monitor posts a structured markdown comment on the PR with stage-by-stage results (executor, gates, reviewer, monitor). See [docs/pr-pipeline-summary.md](docs/pr-pipeline-summary.md) for design. Good candidate for a Nubi task.
 - Flexible pipelines — allow different task types to use different agent compositions (e.g. investigator → executor for infra incidents). See [docs/flexible-pipelines.md](docs/flexible-pipelines.md) for design exploration
 - Cost budget enforcement based on Langfuse data
 - Human-in-the-loop approval gates (pause reconciliation)
