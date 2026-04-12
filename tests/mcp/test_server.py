@@ -385,3 +385,246 @@ class TestDeleteTaskSpec:
 
         assert "Error deleting TaskSpec" in result
         assert "Connection refused" in result
+
+
+# =============================================================================
+# retry_task tests
+# =============================================================================
+
+
+class TestRetryTask:
+    """Tests for the retry_task tool."""
+
+    @patch("nubi.mcp.k8s.patch_taskspec_annotation")
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_retry_failed_task(self, mock_get: MagicMock, mock_patch: MagicMock) -> None:
+        """Retries a Failed task."""
+        from nubi.mcp.server import retry_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Failed"},
+        }
+
+        result = retry_task(name="test-task")
+
+        assert "retry requested successfully" in result
+        mock_get.assert_called_once_with(name="test-task", namespace="nubi-system")
+        mock_patch.assert_called_once()
+        call_args = mock_patch.call_args
+        assert call_args.kwargs["name"] == "test-task"
+        assert call_args.kwargs["namespace"] == "nubi-system"
+        assert call_args.kwargs["annotation"] == "nubi.io/retry"
+        # Verify value is a unix timestamp string
+        assert call_args.kwargs["value"].isdigit()
+
+    @patch("nubi.mcp.k8s.patch_taskspec_annotation")
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_retry_escalated_task(self, mock_get: MagicMock, mock_patch: MagicMock) -> None:
+        """Retries an Escalated task."""
+        from nubi.mcp.server import retry_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Escalated"},
+        }
+
+        result = retry_task(name="test-task")
+
+        assert "retry requested successfully" in result
+        mock_patch.assert_called_once()
+
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_retry_non_terminal_rejected(self, mock_get: MagicMock) -> None:
+        """Reject if phase is not Failed or Escalated."""
+        from nubi.mcp.server import retry_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Executing"},
+        }
+
+        result = retry_task(name="test-task")
+
+        assert "cannot be retried" in result
+        assert "Executing" in result
+        assert "Failed" in result
+        assert "Escalated" in result
+
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_retry_not_found(self, mock_get: MagicMock) -> None:
+        """404 returns error message."""
+        from nubi.mcp.server import retry_task
+
+        mock_get.side_effect = MockApiException(status=404, reason="Not Found")
+
+        result = retry_task(name="nonexistent")
+
+        assert "Error getting task status" in result
+
+    @patch("nubi.mcp.k8s.patch_taskspec_annotation")
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_retry_api_error(self, mock_get: MagicMock, mock_patch: MagicMock) -> None:
+        """Generic error handling."""
+        from nubi.mcp.server import retry_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Failed"},
+        }
+        mock_patch.side_effect = Exception("Connection refused")
+
+        result = retry_task(name="test-task")
+
+        assert "Error retrying task" in result
+        assert "Connection refused" in result
+
+    @patch("nubi.mcp.k8s.patch_taskspec_annotation")
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_retry_custom_namespace(self, mock_get: MagicMock, mock_patch: MagicMock) -> None:
+        """Uses custom namespace."""
+        from nubi.mcp.server import retry_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Failed"},
+        }
+
+        retry_task(name="test-task", namespace="custom-ns")
+
+        mock_get.assert_called_once_with(name="test-task", namespace="custom-ns")
+
+
+# =============================================================================
+# cancel_task tests
+# =============================================================================
+
+
+class TestCancelTask:
+    """Tests for the cancel_task tool."""
+
+    @patch("nubi.mcp.k8s.patch_taskspec_annotation")
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_cancel_running_task(self, mock_get: MagicMock, mock_patch: MagicMock) -> None:
+        """Cancels a running task."""
+        from nubi.mcp.server import cancel_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Executing"},
+        }
+
+        result = cancel_task(name="test-task")
+
+        assert "cancellation requested successfully" in result
+        mock_get.assert_called_once_with(name="test-task", namespace="nubi-system")
+        mock_patch.assert_called_once()
+        call_args = mock_patch.call_args
+        assert call_args.kwargs["name"] == "test-task"
+        assert call_args.kwargs["namespace"] == "nubi-system"
+        assert call_args.kwargs["annotation"] == "nubi.io/cancel"
+        # Verify value is a unix timestamp string
+        assert call_args.kwargs["value"].isdigit()
+
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_cancel_terminal_done_rejected(self, mock_get: MagicMock) -> None:
+        """Reject if phase is Done."""
+        from nubi.mcp.server import cancel_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Done"},
+        }
+
+        result = cancel_task(name="test-task")
+
+        assert "cannot be cancelled" in result
+        assert "Done" in result
+
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_cancel_terminal_failed_rejected(self, mock_get: MagicMock) -> None:
+        """Reject if phase is Failed."""
+        from nubi.mcp.server import cancel_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Failed"},
+        }
+
+        result = cancel_task(name="test-task")
+
+        assert "cannot be cancelled" in result
+        assert "Failed" in result
+
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_cancel_terminal_escalated_rejected(self, mock_get: MagicMock) -> None:
+        """Reject if phase is Escalated."""
+        from nubi.mcp.server import cancel_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Escalated"},
+        }
+
+        result = cancel_task(name="test-task")
+
+        assert "cannot be cancelled" in result
+        assert "Escalated" in result
+
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_cancel_terminal_cancelled_rejected(self, mock_get: MagicMock) -> None:
+        """Reject if phase is Cancelled."""
+        from nubi.mcp.server import cancel_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Cancelled"},
+        }
+
+        result = cancel_task(name="test-task")
+
+        assert "cannot be cancelled" in result
+        assert "Cancelled" in result
+
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_cancel_not_found(self, mock_get: MagicMock) -> None:
+        """404 returns error message."""
+        from nubi.mcp.server import cancel_task
+
+        mock_get.side_effect = MockApiException(status=404, reason="Not Found")
+
+        result = cancel_task(name="nonexistent")
+
+        assert "Error getting task status" in result
+
+    @patch("nubi.mcp.k8s.patch_taskspec_annotation")
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_cancel_api_error(self, mock_get: MagicMock, mock_patch: MagicMock) -> None:
+        """Generic error handling."""
+        from nubi.mcp.server import cancel_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Executing"},
+        }
+        mock_patch.side_effect = Exception("Connection refused")
+
+        result = cancel_task(name="test-task")
+
+        assert "Error cancelling task" in result
+        assert "Connection refused" in result
+
+    @patch("nubi.mcp.k8s.patch_taskspec_annotation")
+    @patch("nubi.mcp.k8s.get_taskspec")
+    def test_cancel_custom_namespace(self, mock_get: MagicMock, mock_patch: MagicMock) -> None:
+        """Uses custom namespace."""
+        from nubi.mcp.server import cancel_task
+
+        mock_get.return_value = {
+            "metadata": {"name": "test-task"},
+            "status": {"phase": "Reviewing"},
+        }
+
+        cancel_task(name="test-task", namespace="custom-ns")
+
+        mock_get.assert_called_once_with(name="test-task", namespace="custom-ns")

@@ -53,6 +53,7 @@ class Phase(StrEnum):
     DONE = "Done"
     FAILED = "Failed"
     ESCALATED = "Escalated"
+    CANCELLED = "Cancelled"
 
 
 class OnMaxRetries(StrEnum):

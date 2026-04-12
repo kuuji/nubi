@@ -32,6 +32,8 @@
 - [ ] Slim agent image — `.[dev]` pulls in all test-only deps (pytest-asyncio, respx, etc.). Consider a narrower `[agent-gates]` extra scoped to `{ruff, pytest, radon, mypy}` if image size becomes a concern. Measure first.
 - [ ] Planner network inference — the task interview/planner should analyze the task description to determine what network access the agent will need (e.g. external APIs, package registries) and set `constraints.network_access` accordingly
 - [x] Better CI feedback — CI timeouts escalate instead of retrying, removed double-truncation of check output, bumped per-check detail to 4000 chars
+- [ ] MCP observability — richer introspection tools for running/failed tasks (pod/job status, events, resource usage). Currently blind when `get_task_logs` can't find a matching pod.
+- [ ] Agent k3d access — figure out how nubi agents can run integration tests (k3d-in-k3d, sidecar cluster, or pre-provisioned test cluster)
 - [ ] Planner as MCP skill — interactive task scoping through conversation, then submit via MCP
 - [ ] Langfuse integration — tracing, cost tracking, observability
 
