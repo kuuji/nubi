@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import time
 from typing import Any
@@ -15,6 +16,7 @@ from nubi.agents.monitor_result import MonitorConcern, MonitorDecision, MonitorR
 logger = logging.getLogger(__name__)
 
 GITHUB_API_BASE = "https://api.github.com"
+PIPELINE_SUMMARY_MARKER = "<!-- nubi-pipeline-summary -->"
 
 _repo: str = ""
 _base_branch: str = ""
@@ -341,14 +343,15 @@ def submit_audit(
     Args:
         decision: One of "approve" or "flag".
         summary: One-sentence summary of the audit outcome.
-        pr_summary: Markdown summary for the PR description. Write this as if you are
-            explaining the changes to a teammate reviewing the PR. Include:
+        pr_summary: Markdown summary for the PR description. Write this as if you
+            are explaining the changes to a teammate reviewing the PR. Include:
             - What was changed and why (from the task description)
             - Key implementation decisions visible in the diff
             - What was tested or validated (gate results, reviewer findings)
             - Any caveats or follow-up items
         concerns: Optional list of concerns found. Each dict should have:
-            severity (critical/major/minor), area (process/output/security), description.
+            severity (critical/major/minor), area (process/output/security),
+            description.
     """
     global _audit_result
 
@@ -369,3 +372,423 @@ def submit_audit(
     )
 
     return f"Audit submitted: {parsed_decision.value}"
+
+
+# ---------------------------------------------------------------------------
+# Pipeline Summary
+# ---------------------------------------------------------------------------
+
+
+def _read_artifact(path: str) -> dict[str, Any] | None:
+    """Read a JSON artifact file from the task branch.
+
+    Returns None if the file doesn't exist or can't be parsed.
+    """
+    try:
+        content = read_branch_file(path)
+        if content.startswith("Error:"):
+            return None
+        return json.loads(content)  # type: ignore[no-any-return]
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return None
+
+
+def _format_gate_result(gate: dict[str, Any]) -> tuple[str, str, str]:
+    """Format a single gate result into (status_icon, status_text, details)."""
+    status = gate.get("status", "unknown")
+
+    if status == "passed":
+        icon = "✅"
+        text = "pass"
+        details = _extract_gate_details(gate)
+    elif status == "failed":
+        icon = "❌"
+        text = "fail"
+        details = _extract_gate_details(gate)
+    elif status == "skipped":
+        icon = "⏭"
+        text = "skipped"
+        details = _extract_gate_details(gate)
+    elif status == "error":
+        icon = "⚠️"
+        text = "error"
+        details = _extract_gate_details(gate)
+    else:
+        icon = "❓"
+        text = status
+        details = _extract_gate_details(gate)
+
+    return icon, text, details
+
+
+def _extract_gate_details(gate: dict[str, Any]) -> str:
+    """Extract human-readable details from a gate result."""
+    output = gate.get("output", "")
+    error = gate.get("error", "")
+
+    # For ruff - look for error summary
+    if "error" in output.lower() and "warnings" not in output.lower():
+        # Try to extract line count
+        lines = [ln for ln in output.strip().split("\n") if ln]
+        if lines:
+            # Return first few relevant lines
+            relevant = [
+                ln for ln in lines if "error" in ln.lower() or "warning" in ln.lower()
+            ]
+            if relevant[:3]:
+                sample = "; ".join(relevant[:3])
+                if len(sample) > 100:
+                    sample = sample[:100] + "..."
+                return sample
+
+    # For pytest - look for pass/fail counts
+    if "passed" in output or "failed" in output:
+        for line in output.strip().split("\n"):
+            if "passed" in line or "failed" in line:
+                return line.strip()
+
+    # For radon - look for complexity summary
+    if "complexity" in output.lower() or gate.get("category") == "complexity":
+        lines = output.strip().split("\n")
+        for line in lines:
+            is_complexity = "complexity" in line.lower()
+            has_rank = "rank" in line.lower() or ("A" in line or "B" in line)
+            if is_complexity and has_rank:
+                return line.strip()
+        if lines:
+            return lines[0][:100]
+
+    # For diff_size
+    if gate.get("category") == "diff_size":
+        return output.strip().split("\n")[-1][:100] if output.strip() else "OK"
+
+    # Default - return error or first meaningful line
+    if error:
+        return error[:100] if len(error) > 100 else error
+    if output and len(output) < 200:
+        return output.strip()
+    if output:
+        return output.strip()[:100] + "..."
+    return "OK"
+
+
+def _build_executor_section(result: dict[str, Any] | None) -> str:
+    """Build the Executor section of the pipeline summary."""
+    if result is None:
+        return "### Executor\n| | |\n|---|---|\n| Status | ⚠️ Not available |\n"
+
+    decision = result.get("decision", "unknown")
+    summary = result.get("summary", "")
+
+    # Determine status
+    if decision == "approve":
+        status_icon = "✅"
+        status_text = "Complete"
+    elif decision == "flag":
+        status_icon = "⚠️"
+        status_text = "Flagged"
+    else:
+        status_icon = "❓"
+        status_text = decision.title()
+
+    # Count attempts - look for patterns like "attempt N"
+    attempts = 1
+    if "attempt" in result:
+        attempts = result["attempt"]
+    elif "attempt" in summary.lower():
+        for word in summary.split():
+            if word.lower() == "attempt" or word.isdigit():
+                pass
+        # Simple count from error fields
+        attempts = 1
+
+    commit_sha = result.get("commit_sha", "")[:7]
+    commit_line = f"\\`{commit_sha}\\`" if commit_sha else "N/A"
+
+    summary_truncated = summary[:100] + "..." if len(summary) > 100 else summary
+
+    lines = [
+        "### Executor",
+        "| | |",
+        "|---|---|",
+        f"| Status | {status_icon} {status_text} |",
+        f"| Attempts | {attempts} |",
+        f"| Commit | {commit_line} |",
+        f"| Summary | {summary_truncated} |",
+    ]
+    return "\n".join(lines)
+
+
+def _build_gates_section(gates_data: dict[str, Any] | None) -> str:
+    """Build the Gates section of the pipeline summary."""
+    not_available = "— | ⚠️ Not available | —"
+    if gates_data is None:
+        return f"### Gates\n| Gate | Result | Details |\n|---|---|---|\n| {not_available} |\n"
+
+    gates = gates_data.get("gates", [])
+    if not gates:
+        no_gates = "— | ⚠️ No gates run | —"
+        return f"### Gates\n| Gate | Result | Details |\n|---|---|---|\n| {no_gates} |\n"
+
+    lines = [
+        "### Gates",
+        "| Gate | Result | Details |",
+        "|---|---|---|",
+    ]
+
+    for gate in gates:
+        icon, text, details = _format_gate_result(gate)
+        name = gate.get("name", "unknown")
+        lines.append(f"| {name} | {icon} {text} | {details} |")
+
+    # Add failed attempts in collapsible details if any failed
+    failed_gates = [g for g in gates if g.get("status") == "failed"]
+    if failed_gates:
+        lines.append("")
+        lines.append("<details>")
+        lines.append("<summary>Gate details (failed)</summary>")
+        lines.append("")
+        lines.append("| Gate | Result | Details |")
+        lines.append("|---|---|---|")
+        for gate in failed_gates:
+            icon, text, details = _format_gate_result(gate)
+            name = gate.get("name", "unknown")
+            lines.append(f"| {name} | {icon} {text} | {details} |")
+        lines.append("</details>")
+
+    return "\n".join(lines)
+
+
+def _build_reviewer_section(review: dict[str, Any] | None) -> str:
+    """Build the Reviewer section of the pipeline summary."""
+    if review is None:
+        return "### Reviewer\n| | |\n|---|---|\n| Decision | ⏭ Skipped |\n"
+
+    # Check for skipped state
+    issues = review.get("issues", [])
+    if not review.get("decision") and not issues:
+        return "### Reviewer\n| | |\n|---|---|\n| Decision | ⏭ Skipped |\n"
+
+    decision = review.get("decision", "unknown")
+    feedback = review.get("feedback", "")
+
+    # Determine icon and text
+    if decision == "approve":
+        icon = "✅"
+        text = "Approve"
+    elif decision == "request_changes":
+        icon = "⚠️"
+        text = "Request Changes"
+    elif decision == "comment":
+        icon = "💬"
+        text = "Comment"
+    else:
+        icon = "❓"
+        text = decision.title() if decision else "Unknown"
+
+    # Truncate feedback
+    feedback_short = feedback[:200] + "..." if len(feedback) > 200 else feedback
+    feedback_escaped = feedback_short.replace("\n", " ").replace("|", "\\|")
+
+    lines = [
+        "### Reviewer",
+        "| | |",
+        "|---|---|",
+        f"| Decision | {icon} {text} |",
+        f"| Feedback | {feedback_escaped} |",
+    ]
+    return "\n".join(lines)
+
+
+def _build_monitor_section(monitor: dict[str, Any] | None) -> str:
+    """Build the Monitor section of the pipeline summary."""
+    if monitor is None:
+        return "### Monitor\n| | |\n|---|---|\n| Decision | ⚠️ Not available |\n"
+
+    decision = monitor.get("decision", "unknown")
+    ci_status = monitor.get("ci_status", "")
+
+    # Determine decision icon and text
+    if decision == "approve":
+        dec_icon = "✅"
+        dec_text = "Approve"
+    elif decision == "flag":
+        dec_icon = "⚠️"
+        dec_text = "Flagged"
+    elif decision == "ci-failed":
+        dec_icon = "❌"
+        dec_text = "CI Failed"
+    elif decision == "escalate":
+        dec_icon = "🔺"
+        dec_text = "Escalated"
+    else:
+        dec_icon = "❓"
+        dec_text = decision.title()
+
+    # Determine CI status icon
+    if ci_status == "success":
+        ci_icon = "✅"
+        ci_text = "All checks passed"
+    elif ci_status == "failure" or ci_status == "ci-failed":
+        ci_icon = "❌"
+        ci_text = "Checks failed"
+    elif ci_status == "timed_out":
+        ci_icon = "⏱️"
+        ci_text = "Timed out"
+    elif ci_status == "pending":
+        ci_icon = "⏳"
+        ci_text = "Pending"
+    else:
+        ci_icon = "❓"
+        ci_text = ci_status or "Unknown"
+
+    lines = [
+        "### Monitor",
+        "| | |",
+        "|---|---|",
+        f"| Decision | {dec_icon} {dec_text} |",
+        f"| CI Status | {ci_icon} {ci_text} |",
+    ]
+    return "\n".join(lines)
+
+
+def format_pipeline_summary_markdown(
+    task_id: str,
+    result: dict[str, Any] | None = None,
+    gates: dict[str, Any] | None = None,
+    review: dict[str, Any] | None = None,
+    monitor: dict[str, Any] | None = None,
+) -> str:
+    """Format pipeline artifact data into a markdown pipeline summary comment.
+
+    Args:
+        task_id: The task identifier (used in the branch name).
+        result: The executor result.json artifact.
+        gates: The gates.json artifact.
+        review: The review.json artifact.
+        monitor: The monitor.json artifact.
+
+    Returns:
+        A markdown-formatted string for the PR comment.
+    """
+    task_short = task_id[:20] + "..." if len(task_id) > 20 else task_id
+    branch_name = f"nubi/{task_id}"
+
+    lines = [
+        PIPELINE_SUMMARY_MARKER,
+        "",
+        "## Nubi Pipeline Summary",
+        "",
+        f"**Task:** \\`{task_short}\\` · **Branch:** \\`{branch_name}\\`",
+        "",
+        _build_executor_section(result),
+        "",
+        _build_gates_section(gates),
+        "",
+        _build_reviewer_section(review),
+        "",
+        _build_monitor_section(monitor),
+        "",
+        "---",
+        "*Generated by [Nubi](https://github.com/kuuji/nubi) · "
+        f"[pipeline artifacts](.nubi/{task_id}/)*",
+    ]
+
+    return "\n".join(lines)
+
+
+def _find_existing_pipeline_comment(pr_number: int) -> dict[str, Any] | None:
+    """Find an existing pipeline summary comment on a PR.
+
+    Returns the comment dict if found, None otherwise.
+    """
+    url = f"{GITHUB_API_BASE}/repos/{_repo}/issues/{pr_number}/comments"
+    resp = httpx.get(url, headers=_headers(), timeout=30)
+    if resp.status_code != 200:
+        return None
+
+    comments = resp.json()
+    for comment in comments:
+        if PIPELINE_SUMMARY_MARKER in comment.get("body", ""):
+            return comment
+    return None
+
+
+def _update_comment(comment_id: int, body: str) -> None:
+    """Update an existing PR comment."""
+    url = f"{GITHUB_API_BASE}/repos/{_repo}/issues/comments/{comment_id}"
+    httpx.patch(
+        url,
+        headers=_headers(),
+        json={"body": body},
+        timeout=30,
+    )
+
+
+def _post_comment(pr_number: int, body: str) -> None:
+    """Post a new PR comment."""
+    url = f"{GITHUB_API_BASE}/repos/{_repo}/issues/{pr_number}/comments"
+    httpx.post(
+        url,
+        headers=_headers(),
+        json={"body": body},
+        timeout=30,
+    )
+
+
+def post_pipeline_summary(
+    pr_url: str,
+    repo: str,
+    branch: str,
+    token: str,
+) -> str:
+    """Post a pipeline summary comment on a PR.
+
+    Reads the four pipeline artifact files from the task branch,
+    formats them as a markdown table, and posts as a PR comment.
+    On subsequent runs, finds and updates the existing comment.
+
+    Args:
+        pr_url: The GitHub PR URL (e.g. https://github.com/owner/repo/pull/123).
+        repo: The repository in owner/repo format.
+        branch: The base branch name (e.g. main).
+        token: GitHub API token.
+
+    Returns:
+        "posted" if a new comment was created, "updated" if an existing comment
+        was updated, or an error message on failure.
+    """
+    # Configure for this run
+    configure(repo=repo, base_branch=branch, task_branch=branch, token=token)
+
+    pr_number = _pr_number_from_url(pr_url)
+    if not pr_number:
+        return f"Error: Could not parse PR number from {pr_url}"
+
+    # Extract task_id from branch name (expects format "nubi/{task_id}")
+    task_id = _task_id_from_branch()
+
+    # Read artifact files
+    result = _read_artifact(f".nubi/{task_id}/result.json")
+    gates = _read_artifact(f".nubi/{task_id}/gates.json")
+    review = _read_artifact(f".nubi/{task_id}/review.json")
+    monitor = _read_artifact(f".nubi/{task_id}/monitor.json")
+
+    # Format the summary
+    body = format_pipeline_summary_markdown(
+        task_id=task_id,
+        result=result,
+        gates=gates,
+        review=review,
+        monitor=monitor,
+    )
+
+    # Check for existing comment
+    existing = _find_existing_pipeline_comment(pr_number)
+    if existing:
+        _update_comment(existing["id"], body)
+        return "updated"
+
+    # Post new comment
+    _post_comment(pr_number, body)
+    return "posted"
