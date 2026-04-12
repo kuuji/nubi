@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
 import subprocess
 import sys
+import threading
 from typing import Any
 
 from nubi.agents.executor import create_executor_agent
@@ -170,7 +172,20 @@ def main() -> int:
     api_key = os.environ["LLM_API_KEY"]
     max_attempts = int(os.environ.get("NUBI_MAX_ATTEMPTS", "3"))
     gate_timeout = int(os.environ.get("NUBI_GATE_TIMEOUT", "300"))
+    timeout = int(os.environ.get("NUBI_TIMEOUT", "0"))
     reviewer_feedback = os.environ.get("NUBI_REVIEWER_FEEDBACK", "")
+
+    # Enforce timeout from the entrypoint so the pod exits gracefully
+    # (preserving logs) instead of being killed by K8s activeDeadlineSeconds.
+    if timeout > 0:
+
+        def _timeout_handler() -> None:
+            logger.error("Executor timed out after %ds", timeout)
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        timer = threading.Timer(timeout, _timeout_handler)
+        timer.daemon = True
+        timer.start()
 
     task_branch = f"nubi/{task_id}"
     logger.info(

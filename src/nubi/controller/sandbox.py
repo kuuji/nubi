@@ -90,6 +90,7 @@ def build_executor_job(
         V1EnvVar(name="NUBI_REPO", value=spec.inputs.repo),
         V1EnvVar(name="NUBI_BRANCH", value=spec.inputs.branch),
         V1EnvVar(name="NUBI_DESCRIPTION", value=spec.description),
+        V1EnvVar(name="NUBI_TIMEOUT", value=str(timeout)),
         *(
             [V1EnvVar(name="NUBI_TOOLS", value=",".join(spec.constraints.tools))]
             if spec.constraints.tools
@@ -169,7 +170,8 @@ def build_executor_job(
         ),
         spec=V1JobSpec(
             backoff_limit=0,
-            active_deadline_seconds=timeout,
+            # Timeout is enforced by the entrypoint (NUBI_TIMEOUT env var),
+            # not by activeDeadlineSeconds, so pods are preserved for log inspection.
             ttl_seconds_after_finished=None,
             template=V1PodTemplateSpec(
                 spec=V1PodSpec(
@@ -228,6 +230,7 @@ def build_reviewer_job(
         V1EnvVar(name="NUBI_REPO", value=spec.inputs.repo),
         V1EnvVar(name="NUBI_BRANCH", value=spec.inputs.branch),
         V1EnvVar(name="NUBI_DESCRIPTION", value=spec.description),
+        V1EnvVar(name="NUBI_TIMEOUT", value=str(timeout)),
         V1EnvVar(name="NUBI_TOOLS", value="shell,git_read,file_read,file_list,review"),
         V1EnvVar(name="NUBI_REVIEW_FOCUS", value=review_focus),
         V1EnvVar(
@@ -304,7 +307,8 @@ def build_reviewer_job(
         ),
         spec=V1JobSpec(
             backoff_limit=0,
-            active_deadline_seconds=timeout,
+            # Timeout is enforced by the entrypoint (NUBI_TIMEOUT env var),
+            # not by activeDeadlineSeconds, so pods are preserved for log inspection.
             ttl_seconds_after_finished=None,
             template=V1PodTemplateSpec(
                 spec=V1PodSpec(
@@ -369,6 +373,7 @@ def build_monitor_job(
         V1EnvVar(name="NUBI_REPO", value=spec.inputs.repo),
         V1EnvVar(name="NUBI_BRANCH", value=spec.inputs.branch),
         V1EnvVar(name="NUBI_DESCRIPTION", value=spec.description),
+        V1EnvVar(name="NUBI_TIMEOUT", value=str(timeout)),
         V1EnvVar(name="NUBI_TOOLS", value="monitor"),
         V1EnvVar(name="NUBI_PR_TITLE_PREFIX", value=pr_title_prefix),
         V1EnvVar(name="NUBI_PR_DRAFT", value=pr_draft),
@@ -456,7 +461,8 @@ def build_monitor_job(
         ),
         spec=V1JobSpec(
             backoff_limit=0,
-            active_deadline_seconds=timeout,
+            # Timeout is enforced by the entrypoint (NUBI_TIMEOUT env var),
+            # not by activeDeadlineSeconds, so pods are preserved for log inspection.
             ttl_seconds_after_finished=None,
             template=V1PodTemplateSpec(
                 spec=V1PodSpec(

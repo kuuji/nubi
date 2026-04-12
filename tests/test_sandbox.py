@@ -118,9 +118,10 @@ class TestBuildExecutorJobSpec:
         job = _build()
         assert job.spec.backoff_limit == 0
 
-    def test_active_deadline_seconds(self) -> None:
+    def test_no_active_deadline_seconds(self) -> None:
+        """Timeout is enforced by entrypoint, not K8s, to preserve pods for log inspection."""
         job = _build(spec=_spec(constraints={"timeout": "600s", "resources": {}}))
-        assert job.spec.active_deadline_seconds == 600
+        assert job.spec.active_deadline_seconds is None
 
     def test_restart_policy_never(self) -> None:
         job = _build()
