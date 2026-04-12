@@ -423,19 +423,21 @@ def _format_gate_result(gate: dict[str, Any]) -> tuple[str, str, str]:
 
 def _extract_gate_details(gate: dict[str, Any]) -> str:
     """Extract human-readable details from a gate result."""
-    output = gate.get("output", "")
-    error = gate.get("error", "")
+    output = str(gate.get("output", ""))
+    error = str(gate.get("error", ""))
 
     # For ruff - look for error summary
     if "error" in output.lower() and "warnings" not in output.lower():
-        lines = [ln for ln in output.strip().split("\n") if ln]
-        if lines:
-            relevant = [ln for ln in lines if "error" in ln.lower() or "warning" in ln.lower()]
-            if relevant[:3]:
-                sample = "; ".join(relevant[:3])
-                if len(sample) > 100:
-                    sample = sample[:100] + "..."
-                return sample
+        output_lines = output.strip().split("\n")
+        relevant_lines = [
+            line for line in output_lines
+            if line and ("error" in line.lower() or "warning" in line.lower())
+        ]
+        if relevant_lines:
+            sample_result: str = "; ".join(relevant_lines[:3])
+            if len(sample_result) > 100:
+                sample_result = sample_result[:100] + "..."
+            return sample_result
 
     # For pytest - look for pass/fail counts
     if "passed" in output or "failed" in output:
@@ -445,26 +447,31 @@ def _extract_gate_details(gate: dict[str, Any]) -> str:
 
     # For radon - look for complexity summary
     if "complexity" in output.lower() or gate.get("category") == "complexity":
-        lines = output.strip().split("\n")
-        for line in lines:
-            is_complexity = "complexity" in line.lower()
-            has_rank = "rank" in line.lower() or ("A" in line or "B" in line)
-            if is_complexity and has_rank:
+        all_lines = output.strip().split("\n")
+        for line in all_lines:
+            line_lower = line.lower()
+            has_rank = "rank" in line_lower or "A" in line or "B" in line
+            if "complexity" in line_lower and has_rank:
                 return line.strip()
-        if lines:
-            return lines[0][:100]
+        if all_lines:
+            return all_lines[0][:100]
 
     # For diff_size
     if gate.get("category") == "diff_size":
-        return output.strip().split("\n")[-1][:100] if output.strip() else "OK"
+        output_lines = output.strip().split("\n")
+        if output_lines:
+            return output_lines[-1][:100]
+        return "OK"
 
     # Default - return error or first meaningful line
     if error:
-        return error[:100] if len(error) > 100 else error
-    if output and len(output) < 200:
-        return output.strip()
+        result_error: str = error
+        return result_error[:100] if len(result_error) > 100 else result_error
     if output:
-        return output.strip()[:100] + "..."
+        result_output: str = output.strip()
+        if len(result_output) < 200:
+            return result_output
+        return result_output[:100] + "..."
     return "OK"
 
 
@@ -695,7 +702,7 @@ def _find_existing_pipeline_comment(pr_number: int) -> dict[str, Any] | None:
     if resp.status_code != 200:
         return None
 
-    comments = resp.json()
+    comments: list[dict[str, Any]] = resp.json()
     for comment in comments:
         if PIPELINE_SUMMARY_MARKER in comment.get("body", ""):
             return comment
