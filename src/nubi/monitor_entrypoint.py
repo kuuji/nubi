@@ -16,10 +16,12 @@ from nubi.tools.github_api import (
     create_pull_request,
     get_audit_result,
     list_branch_files,
+    mark_pr_ready,
     poll_ci_checks,
     read_branch_file,
     read_diff,
     submit_audit,
+    update_pr_from_url,
     write_monitor_result_to_branch,
 )
 
@@ -83,6 +85,20 @@ def main() -> int:
             api_key=api_key,
         )
 
+        # Create draft PR first so the agent audits the PR diff (correctly
+        # scoped by GitHub to only the changes this PR would introduce),
+        # not a branch compare that can include unrelated commits.
+        pr_title = f"{pr_title_prefix} {description[:60]}"
+        pr_body = ""  # Placeholder — updated after audit
+        pr_url = ""
+
+        result = create_pull_request(title=pr_title, body=pr_body, draft=True)
+        logger.info("PR creation result: %s", result)
+        if "PR created:" in result:
+            pr_url = result.split("PR created: ", 1)[1].strip()
+        elif "PR updated:" in result:
+            pr_url = result.split("PR updated: ", 1)[1].strip()
+
         logger.info("Running monitor agent...")
         agent(
             f"Audit the pipeline workflow for task branch {task_branch} "
@@ -106,49 +122,42 @@ def main() -> int:
             )
 
         logger.info("Audit decision: %s", audit.decision.value)
+        audit.pr_url = pr_url
 
-        # Create PR if approved or flagged (draft PR for flagged)
-        if audit.decision in (MonitorDecision.APPROVE, MonitorDecision.FLAG):
-            draft = audit.decision == MonitorDecision.FLAG
-            pr_title = f"{pr_title_prefix} {description[:60]}"
+        # Update PR with audit body and mark ready if approved
+        if pr_url:
             pr_body = _build_pr_body(description, audit)
+            update_pr_from_url(pr_url, pr_title, pr_body)
 
-            result = create_pull_request(title=pr_title, body=pr_body, draft=draft)
-            logger.info("PR creation result: %s", result)
+            if audit.decision == MonitorDecision.APPROVE:
+                mark_pr_ready(pr_url)
 
-            # Extract PR URL from result
-            if "PR created:" in result:
-                audit.pr_url = result.split("PR created: ", 1)[1].strip()
-            elif "PR updated:" in result:
-                audit.pr_url = result.split("PR updated: ", 1)[1].strip()
-
-            # Poll CI checks if PR was created/updated
-            if audit.pr_url:
-                ci_timeout = int(os.environ.get("NUBI_CI_TIMEOUT", "600"))
-                ci_poll = int(os.environ.get("NUBI_CI_POLL_INTERVAL", "30"))
-                logger.info("Polling CI checks (timeout=%ds)...", ci_timeout)
-                ci_status, ci_feedback = poll_ci_checks(
-                    timeout_seconds=ci_timeout,
-                    poll_interval=ci_poll,
+            # Poll CI checks
+            ci_timeout = int(os.environ.get("NUBI_CI_TIMEOUT", "600"))
+            ci_poll = int(os.environ.get("NUBI_CI_POLL_INTERVAL", "30"))
+            logger.info("Polling CI checks (timeout=%ds)...", ci_timeout)
+            ci_status, ci_feedback = poll_ci_checks(
+                timeout_seconds=ci_timeout,
+                poll_interval=ci_poll,
+            )
+            logger.info("CI status: %s", ci_status)
+            if ci_status == "timed_out":
+                logger.warning("CI checks timed out — not retrying")
+                audit = MonitorResult(
+                    decision=MonitorDecision.ESCALATE,
+                    summary="CI checks timed out — needs human investigation",
+                    pr_url=pr_url,
+                    ci_status=ci_status,
+                    ci_feedback=ci_feedback,
                 )
-                logger.info("CI status: %s", ci_status)
-                if ci_status == "timed_out":
-                    logger.warning("CI checks timed out — not retrying")
-                    audit = MonitorResult(
-                        decision=MonitorDecision.ESCALATE,
-                        summary="CI checks timed out — needs human investigation",
-                        pr_url=audit.pr_url,
-                        ci_status=ci_status,
-                        ci_feedback=ci_feedback,
-                    )
-                elif ci_status != "success":
-                    audit = MonitorResult(
-                        decision=MonitorDecision.CI_FAILED,
-                        summary=f"CI checks {ci_status}",
-                        pr_url=audit.pr_url,
-                        ci_status=ci_status,
-                        ci_feedback=ci_feedback,
-                    )
+            elif ci_status != "success":
+                audit = MonitorResult(
+                    decision=MonitorDecision.CI_FAILED,
+                    summary=f"CI checks {ci_status}",
+                    pr_url=pr_url,
+                    ci_status=ci_status,
+                    ci_feedback=ci_feedback,
+                )
 
         # Write result to branch
         write_monitor_result_to_branch(audit)
