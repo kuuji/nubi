@@ -428,10 +428,8 @@ def _extract_gate_details(gate: dict[str, Any]) -> str:
 
     # For ruff - look for error summary
     if "error" in output.lower() and "warnings" not in output.lower():
-        # Try to extract line count
         lines = [ln for ln in output.strip().split("\n") if ln]
         if lines:
-            # Return first few relevant lines
             relevant = [ln for ln in lines if "error" in ln.lower() or "warning" in ln.lower()]
             if relevant[:3]:
                 sample = "; ".join(relevant[:3])
@@ -489,16 +487,8 @@ def _build_executor_section(result: dict[str, Any] | None) -> str:
         status_icon = "❓"
         status_text = decision.title()
 
-    # Count attempts - look for patterns like "attempt N"
-    attempts = 1
-    if "attempt" in result:
-        attempts = result["attempt"]
-    elif "attempt" in summary.lower():
-        for word in summary.split():
-            if word.lower() == "attempt" or word.isdigit():
-                pass
-        # Simple count from error fields
-        attempts = 1
+    # Count attempts
+    attempts = result.get("attempt", 1)
 
     commit_sha = result.get("commit_sha", "")[:7]
     commit_line = f"\\`{commit_sha}\\`" if commit_sha else "N/A"
@@ -539,7 +529,7 @@ def _build_gates_section(gates_data: dict[str, Any] | None) -> str:
         name = gate.get("name", "unknown")
         lines.append(f"| {name} | {icon} {text} | {details} |")
 
-    # Add failed attempts in collapsible details if any failed
+    # Add failed gates in collapsible details section
     failed_gates = [g for g in gates if g.get("status") == "failed"]
     if failed_gates:
         lines.append("")
@@ -627,7 +617,7 @@ def _build_monitor_section(monitor: dict[str, Any] | None) -> str:
     if ci_status == "success":
         ci_icon = "✅"
         ci_text = "All checks passed"
-    elif ci_status == "failure" or ci_status == "ci-failed":
+    elif ci_status in ("failure", "ci-failed"):
         ci_icon = "❌"
         ci_text = "Checks failed"
     elif ci_status == "timed_out":
@@ -737,8 +727,9 @@ def _post_comment(pr_number: int, body: str) -> None:
 def post_pipeline_summary(
     pr_url: str,
     repo: str,
-    branch: str,
+    base_branch: str,
     token: str,
+    task_id: str,
 ) -> str:
     """Post a pipeline summary comment on a PR.
 
@@ -749,24 +740,25 @@ def post_pipeline_summary(
     Args:
         pr_url: The GitHub PR URL (e.g. https://github.com/owner/repo/pull/123).
         repo: The repository in owner/repo format.
-        branch: The base branch name (e.g. main).
+        base_branch: The base branch name (e.g. main).
         token: GitHub API token.
+        task_id: The task identifier (e.g. "add-rate-limiting-a1b2c3").
 
     Returns:
         "posted" if a new comment was created, "updated" if an existing comment
         was updated, or an error message on failure.
     """
+    # Construct task branch from task_id
+    task_branch = f"nubi/{task_id}"
+
     # Configure for this run
-    configure(repo=repo, base_branch=branch, task_branch=branch, token=token)
+    configure(repo=repo, base_branch=base_branch, task_branch=task_branch, token=token)
 
     pr_number = _pr_number_from_url(pr_url)
     if not pr_number:
         return f"Error: Could not parse PR number from {pr_url}"
 
-    # Extract task_id from branch name (expects format "nubi/{task_id}")
-    task_id = _task_id_from_branch()
-
-    # Read artifact files
+    # Read artifact files from the task branch
     result = _read_artifact(f".nubi/{task_id}/result.json")
     gates = _read_artifact(f".nubi/{task_id}/gates.json")
     review = _read_artifact(f".nubi/{task_id}/review.json")
@@ -781,12 +773,11 @@ def post_pipeline_summary(
         monitor=monitor,
     )
 
-    # Check for existing comment
+    # Check for existing comment and update or post
     existing = _find_existing_pipeline_comment(pr_number)
     if existing:
         _update_comment(existing["id"], body)
         return "updated"
 
-    # Post new comment
     _post_comment(pr_number, body)
     return "posted"

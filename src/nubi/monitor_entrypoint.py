@@ -164,7 +164,7 @@ def main() -> int:
             pr_body = _build_pr_body(description, audit)
             update_pr_from_url(pr_url, pr_title, pr_body)
 
-        # Write result to branch
+        # Write monitor result to the task branch
         write_monitor_result_to_branch(audit)
 
         # Post pipeline summary comment on the PR
@@ -173,8 +173,9 @@ def main() -> int:
             summary_result = post_pipeline_summary(
                 pr_url=pr_url,
                 repo=repo,
-                branch=branch,
+                base_branch=branch,
                 token=token,
+                task_id=task_id,
             )
             logger.info("Pipeline summary: %s", summary_result)
 

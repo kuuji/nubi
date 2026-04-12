@@ -140,7 +140,7 @@ class TestFormatPipelineSummaryMarkdown:
         # Check marker
         assert PIPELINE_SUMMARY_MARKER in markdown
 
-        # Check task info (backticks are escaped in markdown tables)
+        # Check task info
         assert "add-rate-limiting" in markdown
         assert "nubi/add-rate-limiting" in markdown
 
@@ -292,8 +292,9 @@ class TestPostPipelineSummary:
         result = post_pipeline_summary(
             pr_url="https://github.com/kuuji/nubi/pull/42",
             repo="kuuji/nubi",
-            branch="main",
+            base_branch="main",
             token="test-token",
+            task_id="test-task",
         )
 
         assert result == "posted"
@@ -326,8 +327,9 @@ class TestPostPipelineSummary:
         result = post_pipeline_summary(
             pr_url="https://github.com/kuuji/nubi/pull/42",
             repo="kuuji/nubi",
-            branch="main",
+            base_branch="main",
             token="test-token",
+            task_id="test-task",
         )
 
         assert result == "updated"
@@ -352,8 +354,9 @@ class TestPostPipelineSummary:
         result = post_pipeline_summary(
             pr_url="https://github.com/kuuji/nubi/pull/42",
             repo="kuuji/nubi",
-            branch="main",
+            base_branch="main",
             token="test-token",
+            task_id="test-task",
         )
 
         assert result == "posted"
@@ -365,8 +368,9 @@ class TestPostPipelineSummary:
         result = post_pipeline_summary(
             pr_url="not-a-url",
             repo="kuuji/nubi",
-            branch="main",
+            base_branch="main",
             token="test-token",
+            task_id="test-task",
         )
 
         assert "Error" in result
