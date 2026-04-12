@@ -317,7 +317,7 @@ def main() -> int:
 
         write_result(result, workspace, task_id)
 
-        subprocess.run(["git", "add", f".nubi/{task_id}/"], cwd=workspace, check=True)
+        subprocess.run(["git", "add", "-f", f".nubi/{task_id}/"], cwd=workspace, check=True)
         subprocess.run(
             ["git", "commit", "-m", "nubi: add executor result and gates"],
             cwd=workspace,
@@ -355,7 +355,7 @@ def main() -> int:
                 error=str(sys.exc_info()[1]),
             )
             write_result(result, workspace, task_id)
-            subprocess.run(["git", "add", f".nubi/{task_id}/"], cwd=workspace)
+            subprocess.run(["git", "add", "-f", f".nubi/{task_id}/"], cwd=workspace)
             subprocess.run(
                 ["git", "commit", "-m", "nubi: add executor failure result"],
                 cwd=workspace,
