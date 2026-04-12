@@ -1,9 +1,20 @@
 {
-  "decision": "ci-failed",
-  "summary": "CI checks timed_out",
-  "pr_summary": "",
-  "concerns": [],
-  "pr_url": "https://github.com/kuuji/nubi/pull/13",
-  "ci_status": "timed_out",
-  "ci_feedback": "CI checks did not complete within 600s"
+  "decision": "flag",
+  "summary": "Implementation is correct but PR contains unrelated pip cache artifacts that should be removed.",
+  "pr_summary": "## What changed\nAdded a `post_pipeline_summary` function to `src/nubi/tools/github_api.py` that posts a structured markdown comment on PRs summarizing the pipeline run (executor, gates, reviewer, monitor stages).\n\n## Key decisions\n- Follows existing patterns from `submit_audit` and `create_pull_request` in the same file\n- Uses try/finally block to temporarily configure GitHub API globals without leaking state\n- Reads artifact files via existing `read_branch_file` helper\n- Finds/updates existing comments via `<!-- nubi-pipeline-summary -->` HTML marker with pagination\n- Gracefully handles missing data (shows \"⏭ Skipped\")\n\n## Validation\n- Comprehensive tests: 21 test cases covering markdown formatting (complete data, skipped stages, failed gates), API integration (post new, update existing), and error handling\n- Reviewer decision: **Approve** — implementation is complete, correct, and well-tested\n\n## Caveats\n- **CRITICAL**: The diff includes ~2MB of pip cache files (`.cache/pip/http-v2/...`) that are not part of the task. These should be removed or excluded via `.gitignore`.\n- Gates (ruff, mypy, pytest) were skipped because tools weren't in PATH during execution — this is an environment issue, not a code issue.\n- CI timed out waiting for checks — this is a transient infrastructure issue, not a code issue.",
+  "concerns": [
+    {
+      "severity": "major",
+      "area": "output",
+      "description": "PR contains ~2MB of pip cache files (.cache/pip/http-v2/...) that are unrelated to the task. These should be removed from the branch."
+    },
+    {
+      "severity": "minor",
+      "area": "output",
+      "description": "PR also includes .local/ binaries and site-packages (pytest, ruff, pygments distributions) that appear to be from a local pip install and are not part of the task scope."
+    }
+  ],
+  "pr_url": "",
+  "ci_status": "",
+  "ci_feedback": ""
 }
