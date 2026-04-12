@@ -368,6 +368,92 @@ def _format_review_decision(decision: ReviewDecision) -> tuple[str, str]:
     return mapping.get(decision, ("❓", "Unknown"))
 
 
+def _executor_section(executor: ExecutorResult | None) -> list[str]:
+    """Build the Executor section lines."""
+    lines: list[str] = []
+    lines.append("### Executor")
+    lines.append("| | |")
+    lines.append("|---|---|")
+    if executor:
+        status_label = "Complete" if executor.status == "success" else "Failed"
+        lines.append(f"| Status | ✅ {status_label} |")
+        lines.append(f"| Commit | `{executor.commit_sha[:8]}` |")
+        if executor.summary:
+            summary_text = executor.summary[:100] + ("..." if len(executor.summary) > 100 else "")
+            lines.append(f"| Summary | {summary_text} |")
+    else:
+        lines.append("| Status | ⏭ Skipped |")
+    return lines
+
+
+def _gates_section(gates: GatesResult | None) -> list[str]:
+    """Build the Gates section lines."""
+    lines: list[str] = []
+    lines.append("### Gates")
+    lines.append("| Gate | Result | Details |")
+    lines.append("|---|---|---|")
+
+    if gates and gates.gates:
+        for gate in gates.gates:
+            emoji, label = _format_gate_status(gate.status)
+            details_parts = []
+            if gate.output:
+                output_preview = gate.output[:50].replace("\n", " ")
+                if len(gate.output) > 50:
+                    output_preview += "..."
+                details_parts.append(output_preview)
+            if gate.error:
+                details_parts.append(f"error: {gate.error[:30]}")
+            details = "; ".join(details_parts) if details_parts else "-"
+            lines.append(f"| {gate.name} | {emoji} {label} | {details} |")
+    else:
+        lines.append("| - | ⏭ Skipped | - |")
+    return lines
+
+
+def _review_section(review: ReviewResult | None) -> list[str]:
+    """Build the Reviewer section lines."""
+    lines: list[str] = []
+    lines.append("### Reviewer")
+    lines.append("| | |")
+    lines.append("|---|---|")
+    if review:
+        emoji, label = _format_review_decision(review.decision)
+        lines.append(f"| Decision | {emoji} {label} |")
+        if review.feedback:
+            feedback_text = review.feedback[:100].replace("\n", " ")
+            if len(review.feedback) > 100:
+                feedback_text += "..."
+            lines.append(f"| Feedback | {feedback_text} |")
+    else:
+        lines.append("| Decision | ⏭ Skipped |")
+    return lines
+
+
+def _monitor_section(monitor: MonitorResult | None) -> list[str]:
+    """Build the Monitor section lines."""
+    lines: list[str] = []
+    lines.append("### Monitor")
+    lines.append("| | |")
+    lines.append("|---|---|")
+    if monitor:
+        decision_labels = {
+            MonitorDecision.APPROVE: "Approve",
+            MonitorDecision.FLAG: "Flag",
+            MonitorDecision.CI_FAILED: "CI Failed",
+            MonitorDecision.ESCALATE: "Escalate",
+        }
+        label = decision_labels.get(monitor.decision, monitor.decision.value)
+        emoji = "✅" if monitor.decision == MonitorDecision.APPROVE else "🔄"
+        lines.append(f"| Decision | {emoji} {label} |")
+        if monitor.ci_status:
+            ci_emoji = "✅" if monitor.ci_status == "success" else "❌"
+            lines.append(f"| CI Status | {ci_emoji} {monitor.ci_status} |")
+    else:
+        lines.append("| Decision | ⏭ Skipped |")
+    return lines
+
+
 def _build_pipeline_summary_markdown(
     task_id: str,
     branch: str,
@@ -397,79 +483,17 @@ def _build_pipeline_summary_markdown(
     lines.append(f"**Task:** `{task_id}` · **Branch:** `{branch}`")
     lines.append("")
 
-    # Executor section
-    lines.append("### Executor")
-    lines.append("| | |")
-    lines.append("|---|---|")
-    if executor:
-        status_label = "Complete" if executor.status == "success" else "Failed"
-        lines.append(f"| Status | ✅ {status_label} |")
-        lines.append(f"| Commit | `{executor.commit_sha[:8]}` |")
-        if executor.summary:
-            summary_text = executor.summary[:100] + ("..." if len(executor.summary) > 100 else "")
-            lines.append(f"| Summary | {summary_text} |")
-    else:
-        lines.append("| Status | ⏭ Skipped |")
+    # Build each section
+    lines.extend(_executor_section(executor))
     lines.append("")
 
-    # Gates section
-    lines.append("### Gates")
-    lines.append("| Gate | Result | Details |")
-    lines.append("|---|---|---|")
-
-    if gates and gates.gates:
-        for gate in gates.gates:
-            emoji, label = _format_gate_status(gate.status)
-            details_parts = []
-            if gate.output:
-                # Truncate output to avoid very long details
-                output_preview = gate.output[:50].replace("\n", " ")
-                if len(gate.output) > 50:
-                    output_preview += "..."
-                details_parts.append(output_preview)
-            if gate.error:
-                details_parts.append(f"error: {gate.error[:30]}")
-            details = "; ".join(details_parts) if details_parts else "-"
-            lines.append(f"| {gate.name} | {emoji} {label} | {details} |")
-    else:
-        lines.append("| - | ⏭ Skipped | - |")
+    lines.extend(_gates_section(gates))
     lines.append("")
 
-    # Reviewer section
-    lines.append("### Reviewer")
-    lines.append("| | |")
-    lines.append("|---|---|")
-    if review:
-        emoji, label = _format_review_decision(review.decision)
-        lines.append(f"| Decision | {emoji} {label} |")
-        if review.feedback:
-            feedback_text = review.feedback[:100].replace("\n", " ")
-            if len(review.feedback) > 100:
-                feedback_text += "..."
-            lines.append(f"| Feedback | {feedback_text} |")
-    else:
-        lines.append("| Decision | ⏭ Skipped |")
+    lines.extend(_review_section(review))
     lines.append("")
 
-    # Monitor section
-    lines.append("### Monitor")
-    lines.append("| | |")
-    lines.append("|---|---|")
-    if monitor:
-        decision_labels = {
-            MonitorDecision.APPROVE: "Approve",
-            MonitorDecision.FLAG: "Flag",
-            MonitorDecision.CI_FAILED: "CI Failed",
-            MonitorDecision.ESCALATE: "Escalate",
-        }
-        label = decision_labels.get(monitor.decision, monitor.decision.value)
-        emoji = "✅" if monitor.decision == MonitorDecision.APPROVE else "🔄"
-        lines.append(f"| Decision | {emoji} {label} |")
-        if monitor.ci_status:
-            ci_emoji = "✅" if monitor.ci_status == "success" else "❌"
-            lines.append(f"| CI Status | {ci_emoji} {monitor.ci_status} |")
-    else:
-        lines.append("| Decision | ⏭ Skipped |")
+    lines.extend(_monitor_section(monitor))
 
     # Footer
     lines.append("")
@@ -518,6 +542,43 @@ def _update_pr_comment(comment_id: int, body: str) -> None:
     )
 
 
+def _load_pipeline_artifacts(task_id: str) -> tuple[ExecutorResult | None, GatesResult | None, ReviewResult | None, MonitorResult | None]:  # noqa: E501
+    """Load pipeline artifact files and parse into result models.
+
+    Args:
+        task_id: The task identifier.
+
+    Returns:
+        Tuple of (executor, gates, review, monitor) models or None if missing.
+    """
+    executor: ExecutorResult | None = None
+    gates: GatesResult | None = None
+    review: ReviewResult | None = None
+    monitor: MonitorResult | None = None
+
+    executor_data = _read_branch_file_raw(_artifact_path(task_id, "result.json"))
+    if executor_data:
+        with suppress(Exception):
+            executor = ExecutorResult.model_validate(executor_data)
+
+    gates_data = _read_branch_file_raw(_artifact_path(task_id, "gates.json"))
+    if gates_data:
+        with suppress(Exception):
+            gates = GatesResult.model_validate(gates_data)
+
+    review_data = _read_branch_file_raw(_artifact_path(task_id, "review.json"))
+    if review_data:
+        with suppress(Exception):
+            review = ReviewResult.model_validate(review_data)
+
+    monitor_data = _read_branch_file_raw(_artifact_path(task_id, "monitor.json"))
+    if monitor_data:
+        with suppress(Exception):
+            monitor = MonitorResult.model_validate(monitor_data)
+
+    return executor, gates, review, monitor
+
+
 def post_pipeline_summary(
     pr_url: str,
     repo: str,
@@ -558,39 +619,13 @@ def post_pipeline_summary(
         if branch.startswith("nubi/"):
             task_id = branch[len("nubi/") :]
 
-        # Read artifact files
-        executor_data = _read_branch_file_raw(_artifact_path(task_id, "result.json"))
-        gates_data = _read_branch_file_raw(_artifact_path(task_id, "gates.json"))
-        review_data = _read_branch_file_raw(_artifact_path(task_id, "review.json"))
-        monitor_data = _read_branch_file_raw(_artifact_path(task_id, "monitor.json"))
+        # Load pipeline artifacts
+        executor, gates, review, monitor = _load_pipeline_artifacts(task_id)
 
-        # Parse into models if data exists
-        executor: ExecutorResult | None = None
-        if executor_data:
-            with suppress(Exception):
-                executor = ExecutorResult.model_validate(executor_data)
-
-        gates: GatesResult | None = None
-        if gates_data:
-            with suppress(Exception):
-                gates = GatesResult.model_validate(gates_data)
-
-        review: ReviewResult | None = None
-        if review_data:
-            with suppress(Exception):
-                review = ReviewResult.model_validate(review_data)
-
-        monitor: MonitorResult | None = None
-        if monitor_data:
-            with suppress(Exception):
-                monitor = MonitorResult.model_validate(monitor_data)
-
-        # Build markdown
+        # Build markdown and add HTML marker for update detection
         markdown = _build_pipeline_summary_markdown(
             task_id, branch, executor, gates, review, monitor
         )
-
-        # Add HTML marker for update detection
         body = f"<!-- nubi-pipeline-summary -->\n{markdown}"
 
         # Get PR number
@@ -605,20 +640,21 @@ def post_pipeline_summary(
         if existing_id:
             _update_pr_comment(existing_id, body)
             return f"Pipeline summary updated on PR #{pr_number}"
-        else:
-            url = f"{GITHUB_API_BASE}/repos/{repo}/issues/{pr_number}/comments"
-            resp = httpx.post(
-                url,
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Accept": "application/vnd.github.v3+json",
-                },
-                json={"body": body},
-                timeout=30,
-            )
-            if resp.status_code in (200, 201):
-                return f"Pipeline summary posted on PR #{pr_number}"
-            return f"Error posting comment: {resp.status_code} {resp.text}"
+
+        # Post new comment
+        url = f"{GITHUB_API_BASE}/repos/{repo}/issues/{pr_number}/comments"
+        resp = httpx.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github.v3+json",
+            },
+            json={"body": body},
+            timeout=30,
+        )
+        if resp.status_code in (200, 201):
+            return f"Pipeline summary posted on PR #{pr_number}"
+        return f"Error posting comment: {resp.status_code} {resp.text}"
 
     finally:
         # Restore original config
