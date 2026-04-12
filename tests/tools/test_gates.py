@@ -317,7 +317,7 @@ class TestRunGates:
         assert result.overall_passed is True
 
     @patch("nubi.tools.gates._run_single_gate")
-    def test_skipped_counts_as_passed(self, mock_run_single: MagicMock) -> None:
+    def test_skipped_counts_as_failure(self, mock_run_single: MagicMock) -> None:
         from nubi.tools.gates import run_gates
 
         mock_run_single.side_effect = [
@@ -332,15 +332,15 @@ class TestRunGates:
         policy = GatePolicy()
         result = run_gates(discovered, "/workspace", policy)
 
-        assert result.overall_passed is True
+        assert result.overall_passed is False
 
-    def test_no_gates_discovered_passes(self) -> None:
+    def test_no_gates_discovered_fails(self) -> None:
         from nubi.tools.gates import run_gates
 
         policy = GatePolicy()
         result = run_gates([], "/workspace", policy)
 
-        assert result.overall_passed is True
+        assert result.overall_passed is False
 
     @patch("nubi.tools.gates._run_single_gate")
     def test_returns_gates_result_with_discovered(self, mock_run_single: MagicMock) -> None:
