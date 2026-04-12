@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import time
+from contextlib import suppress
 from typing import Any
 
 import httpx
 from strands import tool
 
+from nubi.agents.gate_result import GatesResult, GateStatus
 from nubi.agents.monitor_result import MonitorConcern, MonitorDecision, MonitorResult
+from nubi.agents.result import ExecutorResult
+from nubi.agents.review_result import ReviewDecision, ReviewResult
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +330,301 @@ def write_monitor_result_to_branch(result: MonitorResult) -> bool:
         return True
     logger.error("Failed to write monitor result: %d %s", put_resp.status_code, put_resp.text)
     return False
+
+
+def _read_branch_file_raw(path: str) -> dict[str, Any] | None:
+    """Read a JSON file from the task branch, returning parsed dict or None on error."""
+    try:
+        content = read_branch_file(path)
+        if content.startswith("Error:"):
+            return None
+        return json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _artifact_path(task_id: str, filename: str) -> str:
+    """Return the artifact file path for a given task_id and filename."""
+    return f".nubi/{task_id}/{filename}"
+
+
+def _format_gate_status(status: GateStatus) -> tuple[str, str]:
+    """Return (emoji, label) for a gate status."""
+    mapping = {
+        GateStatus.PASSED: ("✅", "pass"),
+        GateStatus.FAILED: ("❌", "fail"),
+        GateStatus.SKIPPED: ("⏭", "skipped"),
+    }
+    return mapping.get(status, ("❓", "unknown"))
+
+
+def _format_review_decision(decision: ReviewDecision) -> tuple[str, str]:
+    """Return (emoji, label) for a review decision."""
+    mapping = {
+        ReviewDecision.APPROVE: ("✅", "Approve"),
+        ReviewDecision.REQUEST_CHANGES: ("🔄", "Request Changes"),
+        ReviewDecision.REJECT: ("❌", "Reject"),
+    }
+    return mapping.get(decision, ("❓", "Unknown"))
+
+
+def _build_pipeline_summary_markdown(
+    task_id: str,
+    branch: str,
+    executor: ExecutorResult | None,
+    gates: GatesResult | None,
+    review: ReviewResult | None,
+    monitor: MonitorResult | None,
+) -> str:
+    """Build the pipeline summary markdown from artifact data.
+
+    Args:
+        task_id: The task identifier.
+        branch: The full task branch name.
+        executor: Executor result data.
+        gates: Gates result data.
+        review: Review result data.
+        monitor: Monitor result data.
+
+    Returns:
+        Formatted markdown string.
+    """
+    lines: list[str] = []
+
+    # Header
+    lines.append("## Nubi Pipeline Summary")
+    lines.append("")
+    lines.append(f"**Task:** `{task_id}` · **Branch:** `{branch}`")
+    lines.append("")
+
+    # Executor section
+    lines.append("### Executor")
+    lines.append("| | |")
+    lines.append("|---|---|")
+    if executor:
+        status_label = "Complete" if executor.status == "success" else "Failed"
+        lines.append(f"| Status | ✅ {status_label} |")
+        lines.append(f"| Commit | `{executor.commit_sha[:8]}` |")
+        if executor.summary:
+            summary_text = executor.summary[:100] + ("..." if len(executor.summary) > 100 else "")
+            lines.append(f"| Summary | {summary_text} |")
+    else:
+        lines.append("| Status | ⏭ Skipped |")
+    lines.append("")
+
+    # Gates section
+    lines.append("### Gates")
+    lines.append("| Gate | Result | Details |")
+    lines.append("|---|---|---|")
+
+    if gates and gates.gates:
+        for gate in gates.gates:
+            emoji, label = _format_gate_status(gate.status)
+            details_parts = []
+            if gate.output:
+                # Truncate output to avoid very long details
+                output_preview = gate.output[:50].replace("\n", " ")
+                if len(gate.output) > 50:
+                    output_preview += "..."
+                details_parts.append(output_preview)
+            if gate.error:
+                details_parts.append(f"error: {gate.error[:30]}")
+            details = "; ".join(details_parts) if details_parts else "-"
+            lines.append(f"| {gate.name} | {emoji} {label} | {details} |")
+    else:
+        lines.append("| - | ⏭ Skipped | - |")
+    lines.append("")
+
+    # Reviewer section
+    lines.append("### Reviewer")
+    lines.append("| | |")
+    lines.append("|---|---|")
+    if review:
+        emoji, label = _format_review_decision(review.decision)
+        lines.append(f"| Decision | {emoji} {label} |")
+        if review.feedback:
+            feedback_text = review.feedback[:100].replace("\n", " ")
+            if len(review.feedback) > 100:
+                feedback_text += "..."
+            lines.append(f"| Feedback | {feedback_text} |")
+    else:
+        lines.append("| Decision | ⏭ Skipped |")
+    lines.append("")
+
+    # Monitor section
+    lines.append("### Monitor")
+    lines.append("| | |")
+    lines.append("|---|---|")
+    if monitor:
+        decision_labels = {
+            MonitorDecision.APPROVE: "Approve",
+            MonitorDecision.FLAG: "Flag",
+            MonitorDecision.CI_FAILED: "CI Failed",
+            MonitorDecision.ESCALATE: "Escalate",
+        }
+        label = decision_labels.get(monitor.decision, monitor.decision.value)
+        emoji = "✅" if monitor.decision == MonitorDecision.APPROVE else "🔄"
+        lines.append(f"| Decision | {emoji} {label} |")
+        if monitor.ci_status:
+            ci_emoji = "✅" if monitor.ci_status == "success" else "❌"
+            lines.append(f"| CI Status | {ci_emoji} {monitor.ci_status} |")
+    else:
+        lines.append("| Decision | ⏭ Skipped |")
+
+    # Footer
+    lines.append("")
+    lines.append("---")
+    nubi_link = "[Nubi](https://github.com/kuuji/nubi)"
+    lines.append(f"*Generated by {nubi_link} · [pipeline artifacts](.nubi/{task_id}/)*")
+
+    return "\n".join(lines)
+
+
+def _find_existing_summary_comment(pr_number: int) -> int | None:
+    """Find an existing pipeline summary comment by HTML marker.
+
+    Returns the comment ID if found, None otherwise.
+    """
+    url = f"{GITHUB_API_BASE}/repos/{_repo}/issues/{pr_number}/comments"
+    page = 1
+    while True:
+        resp = httpx.get(
+            url,
+            headers=_headers(),
+            params={"page": page, "per_page": 100},
+            timeout=30,
+        )
+        if resp.status_code != 200:
+            return None
+        comments = resp.json()
+        if not comments:
+            return None
+        for comment in comments:
+            if "<!-- nubi-pipeline-summary -->" in comment.get("body", ""):
+                return comment["id"]
+        page += 1
+        if page > 10:  # Safety limit
+            return None
+
+
+def _update_pr_comment(comment_id: int, body: str) -> None:
+    """Update an existing PR comment."""
+    url = f"{GITHUB_API_BASE}/repos/{_repo}/issues/comments/{comment_id}"
+    httpx.patch(
+        url,
+        headers=_headers(),
+        json={"body": body},
+        timeout=30,
+    )
+
+
+def post_pipeline_summary(
+    pr_url: str,
+    repo: str,
+    branch: str,
+    token: str,
+) -> str:
+    """Post a pipeline summary comment on the PR.
+
+    Reads the four artifact files (result.json, gates.json, review.json,
+    monitor.json) from the branch and formats them into a structured markdown
+    comment. If a summary comment already exists, updates it instead of
+    creating a new one.
+
+    Args:
+        pr_url: The GitHub PR URL.
+        repo: The repository in "owner/repo" format.
+        branch: The task branch name (e.g., "nubi/add-rate-limiting-a1b2c3").
+        token: GitHub API token.
+
+    Returns:
+        Success or error message.
+    """
+    # Declare global usage to avoid UnboundLocalError
+    global _repo, _token, _task_branch
+
+    # Configure temporarily for read_branch_file calls
+    original_repo = _repo
+    original_token = _token
+    original_branch = _task_branch
+
+    _repo = repo
+    _token = token
+    _task_branch = branch
+
+    try:
+        # Extract task_id from branch
+        task_id = branch
+        if branch.startswith("nubi/"):
+            task_id = branch[len("nubi/") :]
+
+        # Read artifact files
+        executor_data = _read_branch_file_raw(_artifact_path(task_id, "result.json"))
+        gates_data = _read_branch_file_raw(_artifact_path(task_id, "gates.json"))
+        review_data = _read_branch_file_raw(_artifact_path(task_id, "review.json"))
+        monitor_data = _read_branch_file_raw(_artifact_path(task_id, "monitor.json"))
+
+        # Parse into models if data exists
+        executor: ExecutorResult | None = None
+        if executor_data:
+            with suppress(Exception):
+                executor = ExecutorResult.model_validate(executor_data)
+
+        gates: GatesResult | None = None
+        if gates_data:
+            with suppress(Exception):
+                gates = GatesResult.model_validate(gates_data)
+
+        review: ReviewResult | None = None
+        if review_data:
+            with suppress(Exception):
+                review = ReviewResult.model_validate(review_data)
+
+        monitor: MonitorResult | None = None
+        if monitor_data:
+            with suppress(Exception):
+                monitor = MonitorResult.model_validate(monitor_data)
+
+        # Build markdown
+        markdown = _build_pipeline_summary_markdown(
+            task_id, branch, executor, gates, review, monitor
+        )
+
+        # Add HTML marker for update detection
+        body = f"<!-- nubi-pipeline-summary -->\n{markdown}"
+
+        # Get PR number
+        pr_number = _pr_number_from_url(pr_url)
+        if not pr_number:
+            return f"Error: Could not extract PR number from {pr_url}"
+
+        # Check for existing comment
+        existing_id = _find_existing_summary_comment(pr_number)
+
+        # Post or update comment
+        if existing_id:
+            _update_pr_comment(existing_id, body)
+            return f"Pipeline summary updated on PR #{pr_number}"
+        else:
+            url = f"{GITHUB_API_BASE}/repos/{repo}/issues/{pr_number}/comments"
+            resp = httpx.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github.v3+json",
+                },
+                json={"body": body},
+                timeout=30,
+            )
+            if resp.status_code in (200, 201):
+                return f"Pipeline summary posted on PR #{pr_number}"
+            return f"Error posting comment: {resp.status_code} {resp.text}"
+
+    finally:
+        # Restore original config
+        _repo = original_repo
+        _token = original_token
+        _task_branch = original_branch
 
 
 @tool
