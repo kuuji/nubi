@@ -114,7 +114,10 @@ def run_gates(
         if gate_result.status == GateStatus.FAILED:
             break
 
-    all_passed = all(r.status in (GateStatus.PASSED, GateStatus.SKIPPED) for r in results)
+    all_skipped = all(r.status == GateStatus.SKIPPED for r in results) if results else True
+    all_passed = not all_skipped and all(
+        r.status in (GateStatus.PASSED, GateStatus.SKIPPED) for r in results
+    )
     return GatesResult(
         discovered=discovered,
         gates=results,

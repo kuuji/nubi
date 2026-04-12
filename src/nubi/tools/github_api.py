@@ -104,7 +104,7 @@ def list_branch_files(path: str = "") -> str:
 
 
 @tool
-def create_pull_request(title: str, body: str) -> str:
+def create_pull_request(title: str, body: str, draft: bool = False) -> str:
     """Create or update a GitHub pull request from the task branch to the base branch.
 
     If a PR already exists for this branch, updates its title and body instead.
@@ -112,6 +112,7 @@ def create_pull_request(title: str, body: str) -> str:
     Args:
         title: PR title.
         body: PR description body (markdown).
+        draft: If True, create as a draft PR.
     """
     url = f"{GITHUB_API_BASE}/repos/{_repo}/pulls"
     payload: dict[str, Any] = {
@@ -119,6 +120,7 @@ def create_pull_request(title: str, body: str) -> str:
         "body": body,
         "head": _task_branch,
         "base": _base_branch,
+        "draft": draft,
     }
     resp = httpx.post(url, headers=_headers(), json=payload, timeout=30)
     if resp.status_code == 201:

@@ -107,12 +107,13 @@ def main() -> int:
 
         logger.info("Audit decision: %s", audit.decision.value)
 
-        # Create PR if approved
-        if audit.decision == MonitorDecision.APPROVE:
+        # Create PR if approved or flagged (draft PR for flagged)
+        if audit.decision in (MonitorDecision.APPROVE, MonitorDecision.FLAG):
+            draft = audit.decision == MonitorDecision.FLAG
             pr_title = f"{pr_title_prefix} {description[:60]}"
             pr_body = _build_pr_body(description, audit)
 
-            result = create_pull_request(title=pr_title, body=pr_body)
+            result = create_pull_request(title=pr_title, body=pr_body, draft=draft)
             logger.info("PR creation result: %s", result)
 
             # Extract PR URL from result
