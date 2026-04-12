@@ -430,7 +430,8 @@ def _extract_gate_details(gate: dict[str, Any]) -> str:
     if "error" in output.lower() and "warnings" not in output.lower():
         output_lines = output.strip().split("\n")
         relevant_lines = [
-            line for line in output_lines
+            line
+            for line in output_lines
             if line and ("error" in line.lower() or "warning" in line.lower())
         ]
         if relevant_lines:
