@@ -40,7 +40,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.00015544891357421875,
+      "duration_seconds": 0.0000972747802734375,
       "error": ""
     },
     {
@@ -49,7 +49,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.00006031990051269531,
+      "duration_seconds": 0.00005745887756347656,
       "error": ""
     },
     {
@@ -58,7 +58,7 @@
       "status": "skipped",
       "output": "mypy not found in PATH",
       "command": "",
-      "duration_seconds": 0.00006437301635742188,
+      "duration_seconds": 0.00008869171142578125,
       "error": ""
     },
     {
@@ -67,16 +67,16 @@
       "status": "skipped",
       "output": "pytest not found in PATH",
       "command": "",
-      "duration_seconds": 0.00006031990051269531,
+      "duration_seconds": 0.00005435943603515625,
       "error": ""
     },
     {
       "name": "diff_size",
       "category": "diff_size",
       "status": "passed",
-      "output": " .nubi/pr-pipeline-summary-v2/gates.json  |  85 +++++++\n .nubi/pr-pipeline-summary-v2/result.json |  11 +\n .nubi/pr-pipeline-summary-v2/review.json |  31 +++\n src/nubi/monitor_entrypoint.py           |  12 +\n src/nubi/tools/github_api.py             | 389 +++++++++++++++++++++++++++++\n tests/tools/test_github_api.py           | 416 +++++++++++++++++++++++++++++++\n 6 files changed, 944 insertions(+)\n",
+      "output": " .nubi/pr-pipeline-summary-v2/gates.json   |  85 ++++++\n .nubi/pr-pipeline-summary-v2/monitor.json |   9 +\n .nubi/pr-pipeline-summary-v2/result.json  |  14 +\n .nubi/pr-pipeline-summary-v2/review.json  |   6 +\n src/nubi/monitor_entrypoint.py            |  12 +\n src/nubi/tools/github_api.py              | 453 ++++++++++++++++++++++++++++++\n tests/tools/test_github_api.py            | 415 +++++++++++++++++++++++++++\n 7 files changed, 994 insertions(+)\n",
       "command": "git diff --stat origin/main..HEAD",
-      "duration_seconds": 0.004648447036743164,
+      "duration_seconds": 0.004874467849731445,
       "error": ""
     }
   ],
