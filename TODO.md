@@ -17,6 +17,7 @@
 - [x] CI parity — same checks locally and in CI, integration tests with k3d in GitHub Actions
 
 ## Backlog
+- [ ] MCP retry_task broken — `patch_namespaced_custom_object` gets unexpected `_content_type` kwarg. Likely kubernetes-asyncio API mismatch in the MCP k8s client wrapper.
 - [ ] Context management — needs more research. Subagent approach solved overflow but lost error detail. Scoped gates help. Open question.
 - [x] Deploy manifests — Kustomize base, MCP Dockerfile, split monolithic deployment.yaml (PR #6, done by nubi)
 - [x] Deploy to gitops-lab — ArgoCD Application pointing to kuuji/nubi/manifests/, cluster-specific secrets + ingress for MCP
