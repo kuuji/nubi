@@ -54,9 +54,7 @@ class TestUpdatePrFromUrl:
 class TestMarkPrReady:
     @patch("nubi.tools.github_api.httpx.post")
     @patch("nubi.tools.github_api.httpx.get")
-    def test_marks_ready_via_graphql(
-        self, mock_get: MagicMock, mock_post: MagicMock
-    ) -> None:
+    def test_marks_ready_via_graphql(self, mock_get: MagicMock, mock_post: MagicMock) -> None:
         configure(repo="kuuji/nubi", base_branch="main", task_branch="nubi/t1", token="tok")
         mock_get.return_value = MagicMock(
             status_code=200,
@@ -75,9 +73,7 @@ class TestMarkPrReady:
 
     @patch("nubi.tools.github_api.httpx.post")
     @patch("nubi.tools.github_api.httpx.get")
-    def test_skips_on_pr_fetch_failure(
-        self, mock_get: MagicMock, mock_post: MagicMock
-    ) -> None:
+    def test_skips_on_pr_fetch_failure(self, mock_get: MagicMock, mock_post: MagicMock) -> None:
         configure(repo="kuuji/nubi", base_branch="main", task_branch="nubi/t1", token="tok")
         mock_get.return_value = MagicMock(status_code=404)
 

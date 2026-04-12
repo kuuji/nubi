@@ -432,9 +432,7 @@ def _extract_gate_details(gate: dict[str, Any]) -> str:
         lines = [ln for ln in output.strip().split("\n") if ln]
         if lines:
             # Return first few relevant lines
-            relevant = [
-                ln for ln in lines if "error" in ln.lower() or "warning" in ln.lower()
-            ]
+            relevant = [ln for ln in lines if "error" in ln.lower() or "warning" in ln.lower()]
             if relevant[:3]:
                 sample = "; ".join(relevant[:3])
                 if len(sample) > 100:
