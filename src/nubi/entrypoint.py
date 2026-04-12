@@ -237,6 +237,27 @@ def main() -> int:
             )
             logger.info("Created new branch %s", task_branch)
 
+        # Rebase task branch on latest base branch so the diff is clean
+        # and the monitor doesn't flag unrelated changes as scope creep.
+        rebase = subprocess.run(
+            ["git", "rebase", f"origin/{branch}"],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+        )
+        if rebase.returncode != 0:
+            logger.warning(
+                "Rebase on %s failed, aborting rebase: %s",
+                branch,
+                rebase.stderr.strip(),
+            )
+            subprocess.run(
+                ["git", "rebase", "--abort"],
+                cwd=workspace,
+                capture_output=True,
+                text=True,
+            )
+
         allowed_tools = [t.strip() for t in tools_csv.split(",") if t.strip()]
         tools = get_tools(allowed_tools, workspace)
 
