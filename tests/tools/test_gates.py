@@ -18,14 +18,22 @@ class TestDiscoverGates:
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
     @patch("nubi.tools.gates._discover_diff_size_gate")
+    @patch("nubi.tools.verification_parser.parse_verification_commands")
+    @patch("nubi.tools.verification_parser.to_gate_discoveries")
     def test_discovers_python_gates(
         self,
+        mock_to_discoveries: MagicMock,
+        mock_parse_verification: MagicMock,
         mock_diff_size: MagicMock,
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
+
+        # Verification parser returns None so we fall through to which-based discovery
+        mock_parse_verification.return_value = None
+        mock_to_discoveries.return_value = []
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="src/foo.py\nsrc/bar.py")
         mock_python.return_value = [
@@ -49,14 +57,22 @@ class TestDiscoverGates:
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
     @patch("nubi.tools.gates._discover_diff_size_gate")
+    @patch("nubi.tools.verification_parser.parse_verification_commands")
+    @patch("nubi.tools.verification_parser.to_gate_discoveries")
     def test_discovers_node_gates(
         self,
+        mock_to_discoveries: MagicMock,
+        mock_parse_verification: MagicMock,
         mock_diff_size: MagicMock,
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
+
+        # Verification parser returns None so we fall through to which-based discovery
+        mock_parse_verification.return_value = None
+        mock_to_discoveries.return_value = []
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="src/index.js\nsrc/app.js")
         mock_python.return_value = []
@@ -78,14 +94,21 @@ class TestDiscoverGates:
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
     @patch("nubi.tools.gates._discover_diff_size_gate")
+    @patch("nubi.tools.verification_parser.parse_verification_commands")
+    @patch("nubi.tools.verification_parser.to_gate_discoveries")
     def test_block_respected(
         self,
+        mock_to_discoveries: MagicMock,
+        mock_parse_verification: MagicMock,
         mock_diff_size: MagicMock,
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
+
+        mock_parse_verification.return_value = None
+        mock_to_discoveries.return_value = []
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="src/foo.py")
         mock_python.return_value = [
@@ -107,14 +130,21 @@ class TestDiscoverGates:
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
     @patch("nubi.tools.gates._discover_diff_size_gate")
+    @patch("nubi.tools.verification_parser.parse_verification_commands")
+    @patch("nubi.tools.verification_parser.to_gate_discoveries")
     def test_allow_restricts(
         self,
+        mock_to_discoveries: MagicMock,
+        mock_parse_verification: MagicMock,
         mock_diff_size: MagicMock,
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
+
+        mock_parse_verification.return_value = None
+        mock_to_discoveries.return_value = []
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="src/foo.py")
         mock_python.return_value = [
@@ -136,14 +166,21 @@ class TestDiscoverGates:
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
     @patch("nubi.tools.gates._discover_diff_size_gate")
+    @patch("nubi.tools.verification_parser.parse_verification_commands")
+    @patch("nubi.tools.verification_parser.to_gate_discoveries")
     def test_diff_size_always_discovered(
         self,
+        mock_to_discoveries: MagicMock,
+        mock_parse_verification: MagicMock,
         mock_diff_size: MagicMock,
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
+
+        mock_parse_verification.return_value = None
+        mock_to_discoveries.return_value = []
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="src/foo.py")
         mock_python.return_value = []
@@ -161,14 +198,22 @@ class TestDiscoverGates:
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
     @patch("nubi.tools.gates._discover_diff_size_gate")
+    @patch("nubi.tools.verification_parser.parse_verification_commands")
+    @patch("nubi.tools.verification_parser.to_gate_discoveries")
     def test_no_changed_files(
         self,
+        mock_to_discoveries: MagicMock,
+        mock_parse_verification: MagicMock,
         mock_diff_size: MagicMock,
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
+
+        # Verification parser returns None so we fall through to which-based discovery
+        mock_parse_verification.return_value = None
+        mock_to_discoveries.return_value = []
 
         mock_subprocess.return_value = MagicMock(returncode=0, stdout="")
         mock_python.return_value = []
