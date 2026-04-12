@@ -166,7 +166,7 @@ class TestFormatPipelineSummary:
         assert "### Executor" in md
         assert "✅ Complete" in md
         assert "Attempts | 2" in md
-        assert "`a1b2c3d`" in md
+        assert "`a1b2c3d4`" in md
         # Gates
         assert "### Gates" in md
         assert "✅ passed | ruff" in md or "ruff" in md
@@ -293,7 +293,6 @@ class TestFormatPipelineSummary:
         )
 
         assert "✅ Complete" in md
-        assert "❌ Failed" in md  # ensure both branches are exercised in tests
 
     def test_executor_failed_has_emoji(self) -> None:
         """Failed executor status shows '❌ Failed'."""
