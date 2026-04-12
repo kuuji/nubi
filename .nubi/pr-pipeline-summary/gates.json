@@ -40,7 +40,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.00009822845458984375,
+      "duration_seconds": 0.00011301040649414062,
       "error": ""
     },
     {
@@ -49,7 +49,7 @@
       "status": "skipped",
       "output": "ruff not found in PATH",
       "command": "",
-      "duration_seconds": 0.000057697296142578125,
+      "duration_seconds": 0.00005555152893066406,
       "error": ""
     },
     {
@@ -58,7 +58,7 @@
       "status": "skipped",
       "output": "mypy not found in PATH",
       "command": "",
-      "duration_seconds": 0.00006985664367675781,
+      "duration_seconds": 0.00006580352783203125,
       "error": ""
     },
     {
@@ -67,7 +67,7 @@
       "status": "skipped",
       "output": "pytest not found in PATH",
       "command": "",
-      "duration_seconds": 0.00006079673767089844,
+      "duration_seconds": 0.00005793571472167969,
       "error": ""
     },
     {
@@ -76,7 +76,7 @@
       "status": "passed",
       "output": " ...5dded4b84aacb1d96c1e64704669d6bab658dcaeab79c36 |  Bin 0 -> 1847 bytes\n ...4b84aacb1d96c1e64704669d6bab658dcaeab79c36.body |  Bin 0 -> 2460 bytes\n ...767991766d9b365a4f3e4449ce3579fd8b0f96a707d5a52 |  Bin 0 -> 1863 bytes\n ...1766d9b365a4f3e4449ce3579fd8b0f96a707d5a52.body |  Bin 0 -> 46257 bytes\n ...91f05c16794a4e2c6c63bcb459c017712a63fb22148cd22 |  Bin 0 -> 1150 bytes\n ...c16794a4e2c6c63bcb459c017712a63fb22148cd22.body |  Bin 0 -> 7484 bytes\n ...9e009fe1267c844e36c442e5b3dc645d5eb9865c545b81a |  Bin 0 -> 1150 bytes\n ...fe1267c844e36c442e5b3dc645d5eb9865c545b81a.body |  Bin 0 -> 20538 bytes\n ...b9737e982606b959f560390acb7a6941fb2438f5758d3ec |  Bin 0 -> 1197 bytes\n ...e982606b959f560390acb7a6941fb2438f5758d3ec.body |   79 +\n ...94d9a943f68359da08431dab4af9f86c33962982ea21b5f |  Bin 0 -> 1773 bytes\n ...943f68359da08431dab4af9f86c33962982ea21b5f.body |  Bin 0 -> 6936 bytes\n ...7ea321ab056bed31a67391a50e82aea9460d349fd057276 |  Bin 0 -> 1192 bytes\n ...1ab056bed31a67391a50e82aea9460d349fd057276.body |  107 +\n ...1de475b66523ed8787778ecb338ae8dc64c39f7ffe2cdf7 |  Bin 0 -> 1178 bytes\n ...5b66523ed8787778ecb338ae8dc64c39f7ffe2cdf7.body |  Bin 0 -> 375249 bytes\n ...d51e99ff2749a7f9b8d28ec4445a5014e6c82a9ff8c7eb1 |  Bin 0 -> 1190 bytes\n ...9ff2749a7f9b8d28ec4445a5014e6c82a9ff8c7eb1.body |  212 +\n ...caa92636d8ccfe658d420ba4ed8f67f7f4e835b214255aa |  Bin 0 -> 1847 bytes\n ...636d8ccfe658d420ba4ed8f67f7f4e835b214255aa.body |  Bin 0 -> 14094 bytes\n ...adbbedc17081d3adb59405d26dce76f23c71b80e3867eab |  Bin 0 -> 1161 bytes\n ...dc17081d3adb59405d26dce76f23c71b80e3867eab.body |  593 +++\n ...357efe8e015c621695508a39823691e4777c7d90558ec8b |  Bin 0 -> 1865 bytes\n ...e8e015c621695508a39823691e4777c7d90558ec8b.body |  Bin 0 -> 749663 bytes\n ...b9fd2d0a88b65a7d2043b2c343936491ef44dc753aa91e0 |  Bin 0 -> 1864 bytes\n ...d0a88b65a7d2043b2c343936491ef44dc753aa91e0.body |  Bin 0 -> 21246 bytes\n ...2b69f4692b96903e0d1df2f92839b402221a47a2ca3b5be |  Bin 0 -> 1231 bytes\n ...4692b96903e0d1df2f92839b402221a47a2ca3b5be.body |   82 +\n ...0c5007f8e0ef36b73b2bdb8cbe7d9c8be102fd7d4efaf35 |  Bin 0 -> 1151 bytes\n ...7f8e0ef36b73b2bdb8cbe7d9c8be102fd7d4efaf35.body |  Bin 0 -> 1231151 bytes\n ...b3fb99ec006f4d173aad55224eb063005c662c586ba0518 |  Bin 0 -> 1863 bytes\n ...9ec006f4d173aad55224eb063005c662c586ba0518.body |  Bin 0 -> 22576 bytes\n ...48c17282ed7a16aa7cbf0ae7aa370d2e20d939a3292aa75 |  Bin 0 -> 1165 bytes\n ...282ed7a16aa7cbf0ae7aa370d2e20d939a3292aa75.body |   79 +\n ...1861346a483546ee4ebbe92a83f2d3a40e917849c2eb140 |  Bin 0 -> 1847 bytes\n ...46a483546ee4ebbe92a83f2d3a40e917849c2eb140.body |  Bin 0 -> 7405 bytes\n ...f37c122db841d6fe4cd322bc10d1a558bb00d146b85cb9a |  Bin 0 -> 1847 bytes\n ...22db841d6fe4cd322bc10d1a558bb00d146b85cb9a.body |  Bin 0 -> 36977 bytes\n ...35917f171c5fe59cc8767e503c75134305eac95c88bc3f8 |  Bin 0 -> 1151 bytes\n ...f171c5fe59cc8767e503c75134305eac95c88bc3f8.body |   91 +\n ...c28c72166da85db3d3c34ea7bd39531944f502465cf3a50 |  Bin 0 -> 1149 bytes\n ...2166da85db3d3c34ea7bd39531944f502465cf3a50.body |  Bin 0 -> 55206 bytes\n ...1358ae7b47b92917f8a6af8c5acecccb52b186c45372c03 |  Bin 0 -> 1123 bytes\n ...e7b47b92917f8a6af8c5acecccb52b186c45372c03.body |  Bin 0 -> 76356 bytes\n ...11a267af8c06f6fa9fa74e1a06b91e221cbd34f379bb11c |  Bin 0 -> 1166 bytes\n ...7af8c06f6fa9fa74e1a06b91e221cbd34f379bb11c.body |  Bin 0 -> 14197 bytes\n ...43af368d3fab1e60dda223939e75dacca27a71f0478c552 |  Bin 0 -> 1103 bytes\n ...68d3fab1e60dda223939e75dacca27a71f0478c552.body |  Bin 0 -> 5098 bytes\n ...5b9608ced10cc1a661cb4850330552cdc6801105598d8e4 |  Bin 0 -> 1195 bytes\n ...8ced10cc1a661cb4850330552cdc6801105598d8e4.body |  356 ++\n ...0e6b78a08fee1da61557cd4bdd93a63331b9d474bca9d38 |  Bin 0 -> 1149 bytes\n ...8a08fee1da61557cd4bdd93a63331b9d474bca9d38.body |  Bin 0 -> 74366 bytes\n ...33cff42628675a7261d15e9515321e4dd2a55d659b886b2 |  Bin 0 -> 1119 bytes\n ...42628675a7261d15e9515321e4dd2a55d659b886b2.body |  Bin 0 -> 11256418 bytes\n ...9a8549867c7c0c30dcdda927be8994b07f4c933db9a04ab |  Bin 0 -> 1196 bytes\n ...9867c7c0c30dcdda927be8994b07f4c933db9a04ab.body |   57 +\n ...c1ff29feff55b10f7dee3ce79cfb8c866c278585bcbadb1 |  Bin 0 -> 1847 bytes\n ...9feff55b10f7dee3ce79cfb8c866c278585bcbadb1.body |  Bin 0 -> 1661 bytes\n ...164036f2cff3c9d0bb0c2b4d1d94bd0814c26b9cbe036b2 |  Bin 0 -> 1850 bytes\n ...6f2cff3c9d0bb0c2b4d1d94bd0814c26b9cbe036b2.body |  Bin 0 -> 32722 bytes\n ...2b9c55edcd311aeafa35cbf852ab2cc5c3f5d1a1a08e2b5 |  Bin 0 -> 1193 bytes\n ...5edcd311aeafa35cbf852ab2cc5c3f5d1a1a08e2b5.body |  152 +\n ...7d708c14827daac3afc81fbb8306b73de8dd6e3f1f8ea3b |    1 +\n .local/bin/py.test                                 |    6 +\n .local/bin/pygmentize                              |    6 +\n .local/bin/pytest                                  |    6 +\n .local/bin/ruff                                    |  Bin 0 -> 27626592 bytes\n .local/lib/python3.12/site-packages/_nubi.pth      |    1 +\n .../python3.12/site-packages/_pytest/__init__.py   |   13 +\n .../site-packages/_\n[truncated - 29588 characters omitted]",
       "command": "git diff --stat origin/main..HEAD",
-      "duration_seconds": 0.2968151569366455,
+      "duration_seconds": 0.29212331771850586,
       "error": ""
     }
   ],
