@@ -14,14 +14,15 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 info() { echo -e "${GREEN}[+]${NC} $*"; }
 
-# 1. Create cluster if not exists
-if ! k3d cluster list -o json 2>/dev/null | grep -q "\"name\":\"${CLUSTER_NAME}\""; then
-    info "Creating k3d cluster ${CLUSTER_NAME}..."
-    k3d cluster create "${CLUSTER_NAME}" --no-lb
-    kubectl wait --for=condition=Ready nodes --all --timeout=60s --context "${CONTEXT}"
-else
-    info "Cluster ${CLUSTER_NAME} already exists"
+# 1. Delete existing cluster (stale kopf peering state causes test failures)
+if k3d cluster list -o json 2>/dev/null | grep -q "\"name\":\"${CLUSTER_NAME}\""; then
+    info "Deleting existing cluster ${CLUSTER_NAME} (clean slate)..."
+    k3d cluster delete "${CLUSTER_NAME}"
 fi
+
+info "Creating k3d cluster ${CLUSTER_NAME}..."
+k3d cluster create "${CLUSTER_NAME}" --no-lb
+kubectl wait --for=condition=Ready nodes --all --timeout=60s --context "${CONTEXT}"
 
 # 2. Apply CRD
 info "Applying CRD..."
