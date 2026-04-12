@@ -114,10 +114,7 @@ def run_gates(
         if gate_result.status == GateStatus.FAILED:
             break
 
-    all_skipped = all(r.status == GateStatus.SKIPPED for r in results) if results else True
-    all_passed = not all_skipped and all(
-        r.status in (GateStatus.PASSED, GateStatus.SKIPPED) for r in results
-    )
+    all_passed = all(r.status in (GateStatus.PASSED, GateStatus.SKIPPED) for r in results)
     return GatesResult(
         discovered=discovered,
         gates=results,
@@ -251,8 +248,9 @@ def _run_command_gate(
         return GateResult(
             name=name,
             category=category,
-            status=GateStatus.SKIPPED,
+            status=GateStatus.FAILED,
             output=f"{name} not found in PATH",
+            error=f"{name} not found in PATH",
             duration_seconds=time.time() - start_time,
         )
 
@@ -307,8 +305,9 @@ def _run_lint_gate(
         return GateResult(
             name=name,
             category=GateCategory.LINT,
-            status=GateStatus.SKIPPED,
+            status=GateStatus.FAILED,
             output=f"{name} not found in PATH",
+            error=f"{name} not found in PATH",
             duration_seconds=time.time() - start_time,
         )
 
@@ -402,8 +401,9 @@ def _run_test_gate(name: str, workspace: str, timeout: int, start_time: float) -
         return GateResult(
             name=name,
             category=GateCategory.TEST,
-            status=GateStatus.SKIPPED,
+            status=GateStatus.FAILED,
             output=f"{name} not found in PATH",
+            error=f"{name} not found in PATH",
             duration_seconds=time.time() - start_time,
         )
 
@@ -469,8 +469,9 @@ def _run_complexity_gate(
         return GateResult(
             name=name,
             category=GateCategory.COMPLEXITY,
-            status=GateStatus.SKIPPED,
+            status=GateStatus.FAILED,
             output=f"{name} not found in PATH",
+            error=f"{name} not found in PATH",
             duration_seconds=time.time() - start_time,
         )
 
