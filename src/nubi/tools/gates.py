@@ -248,8 +248,9 @@ def _run_command_gate(
         return GateResult(
             name=name,
             category=category,
-            status=GateStatus.SKIPPED,
+            status=GateStatus.FAILED,
             output=f"{name} not found in PATH",
+            error=f"{name} not found in PATH",
             duration_seconds=time.time() - start_time,
         )
 
@@ -304,8 +305,9 @@ def _run_lint_gate(
         return GateResult(
             name=name,
             category=GateCategory.LINT,
-            status=GateStatus.SKIPPED,
+            status=GateStatus.FAILED,
             output=f"{name} not found in PATH",
+            error=f"{name} not found in PATH",
             duration_seconds=time.time() - start_time,
         )
 
@@ -399,8 +401,9 @@ def _run_test_gate(name: str, workspace: str, timeout: int, start_time: float) -
         return GateResult(
             name=name,
             category=GateCategory.TEST,
-            status=GateStatus.SKIPPED,
+            status=GateStatus.FAILED,
             output=f"{name} not found in PATH",
+            error=f"{name} not found in PATH",
             duration_seconds=time.time() - start_time,
         )
 
@@ -466,8 +469,9 @@ def _run_complexity_gate(
         return GateResult(
             name=name,
             category=GateCategory.COMPLEXITY,
-            status=GateStatus.SKIPPED,
+            status=GateStatus.FAILED,
             output=f"{name} not found in PATH",
+            error=f"{name} not found in PATH",
             duration_seconds=time.time() - start_time,
         )
 

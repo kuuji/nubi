@@ -321,12 +321,24 @@ class TestRunGates:
         from nubi.tools.gates import run_gates
 
         mock_run_single.side_effect = [
+            GateResult(name="ruff", category=GateCategory.LINT, status=GateStatus.PASSED),
             GateResult(name="eslint", category=GateCategory.LINT, status=GateStatus.SKIPPED),
         ]
 
-        discovered = [GateDiscovery(name="eslint", category=GateCategory.LINT)]
+        discovered = [
+            GateDiscovery(name="ruff", category=GateCategory.LINT),
+            GateDiscovery(name="eslint", category=GateCategory.LINT),
+        ]
         policy = GatePolicy()
         result = run_gates(discovered, "/workspace", policy)
+
+        assert result.overall_passed is True
+
+    def test_no_gates_discovered_passes(self) -> None:
+        from nubi.tools.gates import run_gates
+
+        policy = GatePolicy()
+        result = run_gates([], "/workspace", policy)
 
         assert result.overall_passed is True
 
@@ -352,7 +364,7 @@ class TestRunGates:
 class TestRunSingleGate:
     @patch("nubi.tools.gates.subprocess.run")
     @patch("nubi.tools.gates.which")
-    def test_tool_not_found_returns_skipped(
+    def test_tool_not_found_returns_failed(
         self, mock_which: MagicMock, mock_subprocess: MagicMock
     ) -> None:
         from nubi.tools.gates import _run_single_gate
@@ -362,7 +374,7 @@ class TestRunSingleGate:
         discovery = GateDiscovery(name="nonexistent", category=GateCategory.LINT)
         result = _run_single_gate(discovery, "/workspace", GatePolicy(), timeout=300)
 
-        assert result.status == GateStatus.SKIPPED
+        assert result.status == GateStatus.FAILED
         assert "not found" in result.output.lower()
 
     @patch("nubi.tools.gates.subprocess.run")

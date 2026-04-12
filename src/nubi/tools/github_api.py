@@ -104,7 +104,7 @@ def list_branch_files(path: str = "") -> str:
 
 
 @tool
-def create_pull_request(title: str, body: str) -> str:
+def create_pull_request(title: str, body: str, draft: bool = False) -> str:
     """Create or update a GitHub pull request from the task branch to the base branch.
 
     If a PR already exists for this branch, updates its title and body instead.
@@ -112,6 +112,7 @@ def create_pull_request(title: str, body: str) -> str:
     Args:
         title: PR title.
         body: PR description body (markdown).
+        draft: If True, create as a draft PR.
     """
     url = f"{GITHUB_API_BASE}/repos/{_repo}/pulls"
     payload: dict[str, Any] = {
@@ -119,6 +120,7 @@ def create_pull_request(title: str, body: str) -> str:
         "body": body,
         "head": _task_branch,
         "base": _base_branch,
+        "draft": draft,
     }
     resp = httpx.post(url, headers=_headers(), json=payload, timeout=30)
     if resp.status_code == 201:
@@ -153,6 +155,53 @@ def _update_pr(pr_number: int, title: str, body: str) -> None:
         url,
         headers=_headers(),
         json={"title": title, "body": body},
+        timeout=30,
+    )
+
+
+def _pr_number_from_url(pr_url: str) -> int | None:
+    """Extract PR number from a GitHub PR URL."""
+    # https://github.com/owner/repo/pull/123
+    parts = pr_url.rstrip("/").split("/")
+    try:
+        return int(parts[-1])
+    except (ValueError, IndexError):
+        return None
+
+
+def update_pr_from_url(pr_url: str, title: str, body: str) -> None:
+    """Update a PR's title and body given its URL."""
+    pr_number = _pr_number_from_url(pr_url)
+    if pr_number:
+        _update_pr(pr_number, title, body)
+
+
+def mark_pr_ready(pr_url: str) -> None:
+    """Mark a draft PR as ready for review via the GraphQL API."""
+    pr_number = _pr_number_from_url(pr_url)
+    if not pr_number:
+        return
+    # Get the PR node ID first
+    url = f"{GITHUB_API_BASE}/repos/{_repo}/pulls/{pr_number}"
+    resp = httpx.get(url, headers=_headers(), timeout=30)
+    if resp.status_code != 200:
+        return
+    node_id = resp.json().get("node_id")
+    if not node_id:
+        return
+    # Use GraphQL to mark ready (REST API doesn't support this)
+    graphql_url = "https://api.github.com/graphql"
+    query = """
+    mutation($id: ID!) {
+        markPullRequestReadyForReview(input: {pullRequestId: $id}) {
+            pullRequest { number }
+        }
+    }
+    """
+    httpx.post(
+        graphql_url,
+        headers=_headers(),
+        json={"query": query, "variables": {"id": node_id}},
         timeout=30,
     )
 
