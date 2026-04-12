@@ -98,6 +98,11 @@ def build_executor_job(
         V1EnvVar(name="NUBI_LLM_PROVIDER", value=os.environ.get("NUBI_LLM_PROVIDER", "anthropic")),
         # uid 65534 (nobody) has no home dir — point HOME to workspace for git config etc.
         V1EnvVar(name="HOME", value="/workspace"),
+        # Ensure pip-installed tools (ruff, pytest, mypy) are findable regardless of uid.
+        V1EnvVar(
+            name="PATH",
+            value="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin",
+        ),
         # emptyDir mount is root-owned; git 2.35+ refuses to operate unless safe.directory is set.
         # Setting via env avoids writing a .gitconfig file into the workspace.
         V1EnvVar(name="GIT_CONFIG_COUNT", value="1"),
@@ -165,7 +170,7 @@ def build_executor_job(
         spec=V1JobSpec(
             backoff_limit=0,
             active_deadline_seconds=timeout,
-            ttl_seconds_after_finished=600,
+            ttl_seconds_after_finished=None,
             template=V1PodTemplateSpec(
                 spec=V1PodSpec(
                     runtime_class_name=rc if rc else None,
@@ -233,6 +238,10 @@ def build_reviewer_job(
             ),
         ),
         V1EnvVar(name="HOME", value="/workspace"),
+        V1EnvVar(
+            name="PATH",
+            value="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin",
+        ),
         V1EnvVar(name="GIT_CONFIG_COUNT", value="1"),
         V1EnvVar(name="GIT_CONFIG_KEY_0", value="safe.directory"),
         V1EnvVar(name="GIT_CONFIG_VALUE_0", value="/workspace"),
@@ -296,7 +305,7 @@ def build_reviewer_job(
         spec=V1JobSpec(
             backoff_limit=0,
             active_deadline_seconds=timeout,
-            ttl_seconds_after_finished=600,
+            ttl_seconds_after_finished=None,
             template=V1PodTemplateSpec(
                 spec=V1PodSpec(
                     runtime_class_name=rc if rc else None,
@@ -372,6 +381,10 @@ def build_monitor_job(
             ),
         ),
         V1EnvVar(name="HOME", value="/workspace"),
+        V1EnvVar(
+            name="PATH",
+            value="/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin",
+        ),
         V1EnvVar(name="GIT_CONFIG_COUNT", value="1"),
         V1EnvVar(name="GIT_CONFIG_KEY_0", value="safe.directory"),
         V1EnvVar(name="GIT_CONFIG_VALUE_0", value="/workspace"),
@@ -444,7 +457,7 @@ def build_monitor_job(
         spec=V1JobSpec(
             backoff_limit=0,
             active_deadline_seconds=timeout,
-            ttl_seconds_after_finished=600,
+            ttl_seconds_after_finished=None,
             template=V1PodTemplateSpec(
                 spec=V1PodSpec(
                     runtime_class_name=rc if rc else None,

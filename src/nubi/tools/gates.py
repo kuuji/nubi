@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
 import subprocess
 import time
 from shutil import which
@@ -17,6 +19,8 @@ from nubi.agents.gate_result import (
     GatesResult,
     GateStatus,
 )
+
+logger = logging.getLogger(__name__)
 
 MAX_OUTPUT_LENGTH = 5000
 
@@ -52,6 +56,12 @@ def discover_gates(
     """
     discoveries: list[GateDiscovery] = []
 
+    logger.info(
+        "Gate discovery starting: workspace=%s, PATH=%s",
+        workspace,
+        os.environ.get("PATH", "(unset)"),
+    )
+
     allow_list = gate_policy.allow
     block_list = gate_policy.block
 
@@ -64,12 +74,14 @@ def discover_gates(
     from nubi.tools.verification_parser import parse_verification_commands, to_gate_discoveries
 
     parsed = parse_verification_commands(workspace)
+    logger.info("Verification parser result: %s", parsed)
     if parsed is not None:
         for disc in to_gate_discoveries(parsed):
             if is_allowed(disc.category):
                 discoveries.append(disc)
     else:
         # Fall back to which-based auto-discovery
+        logger.info("No verification file found, falling back to which-based discovery")
         python_discoveries = _discover_python_gates(changed_files, workspace)
         for disc in python_discoveries:
             if is_allowed(disc.category):
@@ -114,7 +126,21 @@ def run_gates(
         if gate_result.status == GateStatus.FAILED:
             break
 
-    all_passed = all(r.status in (GateStatus.PASSED, GateStatus.SKIPPED) for r in results)
+    all_passed = all(r.status == GateStatus.PASSED for r in results) and len(results) > 0
+    skipped = [r.name for r in results if r.status == GateStatus.SKIPPED]
+    failed = [r.name for r in results if r.status == GateStatus.FAILED]
+    if skipped:
+        logger.warning("Gates skipped (counts as failure): %s", skipped)
+    if failed:
+        logger.warning("Gates failed: %s", failed)
+    logger.info(
+        "Gate results: %d total, %d passed, %d failed, %d skipped, overall_passed=%s",
+        len(results),
+        sum(1 for r in results if r.status == GateStatus.PASSED),
+        len(failed),
+        len(skipped),
+        all_passed,
+    )
     return GatesResult(
         discovered=discovered,
         gates=results,
@@ -131,32 +157,17 @@ def _discover_python_gates(changed: list[str], workspace: str) -> list[GateDisco
     if not any(any(p in f for p in py_patterns) for f in changed):
         return discoveries
 
-    if which("ruff"):
-        discoveries.append(
-            GateDiscovery(
-                name="ruff",
-                category=GateCategory.LINT,
-                applies_to=["*.py", "src/**/*.py", "tests/**/*.py"],
-            )
-        )
-
-    if which("pytest"):
-        discoveries.append(
-            GateDiscovery(
-                name="pytest",
-                category=GateCategory.TEST,
-                applies_to=["tests/**/*.py", "**/test_*.py"],
-            )
-        )
-
-    if which("radon"):
-        discoveries.append(
-            GateDiscovery(
-                name="radon",
-                category=GateCategory.COMPLEXITY,
-                applies_to=["*.py", "src/**/*.py"],
-            )
-        )
+    for tool_name, category, applies in [
+        ("ruff", GateCategory.LINT, ["*.py", "src/**/*.py", "tests/**/*.py"]),
+        ("pytest", GateCategory.TEST, ["tests/**/*.py", "**/test_*.py"]),
+        ("radon", GateCategory.COMPLEXITY, ["*.py", "src/**/*.py"]),
+    ]:
+        path = which(tool_name)
+        if path:
+            logger.info("Found %s at %s", tool_name, path)
+            discoveries.append(GateDiscovery(name=tool_name, category=category, applies_to=applies))
+        else:
+            logger.warning("%s not found in PATH", tool_name)
 
     return discoveries
 
@@ -244,7 +255,9 @@ def _run_command_gate(
     category = discovery.category
 
     # Skip if the tool isn't installed
-    if not which(name):
+    tool_path = which(name)
+    if not tool_path:
+        logger.error("%s not found in PATH (PATH=%s)", name, os.environ.get("PATH", "(unset)"))
         return GateResult(
             name=name,
             category=category,
@@ -253,6 +266,7 @@ def _run_command_gate(
             error=f"{name} not found in PATH",
             duration_seconds=time.time() - start_time,
         )
+    logger.info("Running command gate %s (tool at %s): %s", name, tool_path, cmd)
 
     try:
         result = subprocess.run(
