@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "commit_sha": "587b13d79290a49abc3945a5e76bddb61de1c1a7",
+  "summary": "Task completed with all gates passing",
+  "files_changed": [
+    ".nubi/pr-pipeline-summary-v2/gates.json",
+    ".nubi/pr-pipeline-summary-v2/monitor.json",
+    ".nubi/pr-pipeline-summary-v2/result.json",
+    ".nubi/pr-pipeline-summary-v2/review.json",
+    "src/nubi/monitor_entrypoint.py",
+    "src/nubi/tools/github_api.py",
+    "tests/tools/test_github_api.py"
+  ],
+  "error": ""
+}
