@@ -1,0 +1,85 @@
+{
+  "discovered": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "applies_to": [],
+      "command": "ruff check src/ tests/"
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "applies_to": [],
+      "command": "ruff format --check src/ tests/"
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "applies_to": [],
+      "command": "mypy src/nubi/"
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "applies_to": [],
+      "command": "pytest tests/ -v"
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "applies_to": [
+        "*"
+      ],
+      "command": ""
+    }
+  ],
+  "gates": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "status": "skipped",
+      "output": "ruff not found in PATH",
+      "command": "",
+      "duration_seconds": 0.0003008842468261719,
+      "error": ""
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "status": "skipped",
+      "output": "ruff not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00006937980651855469,
+      "error": ""
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "status": "skipped",
+      "output": "mypy not found in PATH",
+      "command": "",
+      "duration_seconds": 0.00013208389282226562,
+      "error": ""
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "status": "skipped",
+      "output": "pytest not found in PATH",
+      "command": "",
+      "duration_seconds": 0.0029087066650390625,
+      "error": ""
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "status": "passed",
+      "output": " src/nubi/monitor_entrypoint.py |  12 ++\n src/nubi/tools/github_api.py   | 367 +++++++++++++++++++++++++++++++++++++++++\n tests/tools/test_github_api.py | 297 +++++++++++++++++++++++++++++++++\n 3 files changed, 676 insertions(+)\n",
+      "command": "git diff --stat origin/main..HEAD",
+      "duration_seconds": 0.005819559097290039,
+      "error": ""
+    }
+  ],
+  "overall_passed": true,
+  "attempt": 1
+}
