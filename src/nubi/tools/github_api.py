@@ -6,7 +6,7 @@ import base64
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from strands import tool
@@ -411,7 +411,8 @@ def _read_json_file(path: str) -> dict[str, Any] | None:
         content = read_branch_file(path)
         if content.startswith("Error:"):
             return None
-        return json.loads(content)
+        # json.loads returns Any; cast to the expected dict type to satisfy mypy
+        return cast("dict[str, Any]", json.loads(content))
     except Exception:
         return None
 
@@ -610,10 +611,11 @@ def _find_existing_summary_comment(pr_number: int) -> int | None:
     if resp.status_code != 200:
         return None
 
-    comments = resp.json()
+    comments: list[dict[str, Any]] = resp.json()
     for comment in comments:
         if SUMMARY_MARKER in comment.get("body", ""):
-            return comment.get("id")
+            # comment["id"] is always an int on GitHub — cast to satisfy mypy
+            return cast("int | None", comment.get("id"))
     return None
 
 
