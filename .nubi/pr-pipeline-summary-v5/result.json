@@ -1,8 +1,10 @@
 {
   "status": "failure",
-  "commit_sha": "0169cdbd96fdb90d61a8b5d47407d4294754ec25",
+  "commit_sha": "905bcb6c5de2f4903cd38badd70a73ccbf9be4d0",
   "summary": "Gates failed after 3 attempts",
   "files_changed": [
+    ".nubi/pr-pipeline-summary-v5/gates.json",
+    ".nubi/pr-pipeline-summary-v5/result.json",
     "src/nubi/monitor_entrypoint.py",
     "src/nubi/tools/github_api.py",
     "tests/tools/test_github_api.py"
