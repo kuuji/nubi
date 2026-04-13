@@ -147,7 +147,7 @@ def _run_gates_loop(
             if g.command:
                 feedback_parts.append(f"Command: `{g.command}`")
             if g.output:
-                feedback_parts.append(f"Output:\n```\n{g.output[:2000]}\n```")
+                feedback_parts.append(f"Output:\n```\n{g.output}\n```")
         gate_feedback = "\n\n".join(feedback_parts)
 
         logger.info("Gates failed on attempt %d: retrying with feedback", attempt)
