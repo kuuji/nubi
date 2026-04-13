@@ -1,0 +1,11 @@
+{
+  "status": "failure",
+  "commit_sha": "0169cdbd96fdb90d61a8b5d47407d4294754ec25",
+  "summary": "Gates failed after 3 attempts",
+  "files_changed": [
+    "src/nubi/monitor_entrypoint.py",
+    "src/nubi/tools/github_api.py",
+    "tests/tools/test_github_api.py"
+  ],
+  "error": ""
+}

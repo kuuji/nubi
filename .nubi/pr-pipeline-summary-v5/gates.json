@@ -1,0 +1,76 @@
+{
+  "discovered": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "applies_to": [],
+      "command": "ruff check src/ tests/"
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "applies_to": [],
+      "command": "ruff format --check src/ tests/"
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "applies_to": [],
+      "command": "mypy src/nubi/"
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "applies_to": [],
+      "command": "pytest tests/ -v"
+    },
+    {
+      "name": "diff_size",
+      "category": "diff_size",
+      "applies_to": [
+        "*"
+      ],
+      "command": ""
+    }
+  ],
+  "gates": [
+    {
+      "name": "ruff",
+      "category": "lint",
+      "status": "passed",
+      "output": "All checks passed!\n",
+      "command": "ruff check src/ tests/",
+      "duration_seconds": 0.01376199722290039,
+      "error": ""
+    },
+    {
+      "name": "ruff",
+      "category": "format",
+      "status": "passed",
+      "output": "70 files already formatted\n",
+      "command": "ruff format --check src/ tests/",
+      "duration_seconds": 0.010845661163330078,
+      "error": ""
+    },
+    {
+      "name": "mypy",
+      "category": "lint",
+      "status": "passed",
+      "output": "Success: no issues found in 36 source files\n",
+      "command": "mypy src/nubi/",
+      "duration_seconds": 7.66390323638916,
+      "error": ""
+    },
+    {
+      "name": "pytest",
+      "category": "test",
+      "status": "failed",
+      "output": "============================= test session starts ==============================\nplatform linux -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- /usr/local/bin/python3.12\ncachedir: .pytest_cache\nrootdir: /workspace\nconfigfile: pyproject.toml\nplugins: anyio-4.13.0, asyncio-1.3.0\nasyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function\ncollecting ... collected 511 items / 1 error\n\n==================================== ERRORS ====================================\n_______________ ERROR collecting tests/tools/test_github_api.py ________________\nImportError while importing test module '/workspace/tests/tools/test_github_api.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\n/usr/local/lib/python3.12/importlib/__init__.py:90: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests/tools/test_github_api.py:9: in <module>\n    from nubi.tools.github_api import (\nE   ImportError: cannot import name 'PIPELINE_SUMMARY_MARKER' from 'nubi.tools.github_api' (/usr/local/lib/python3.12/site-packages/nubi/tools/github_api.py)\n=========================== short test summary info ============================\nERROR tests/tools/test_github_api.py\n!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n=============================== 1 error in 7.56s ===============================\n",
+      "command": "pytest tests/ -v",
+      "duration_seconds": 9.838826417922974,
+      "error": ""
+    }
+  ],
+  "overall_passed": false,
+  "attempt": 3
+}
