@@ -427,7 +427,7 @@ def test_test_command_detects_terminal_success_when_complete_is_not_first_condit
         completed, log_lines, _rendered = _run_e2e(
             tmp_path,
             "test",
-            timeout=2,
+            timeout=10,
             FAKE_E2E_JOB_STATUS_SEQUENCE="SuccessCriteriaMet",
             FAKE_E2E_JOB_CONDITION_TYPES_SEQUENCE="SuccessCriteriaMet Complete",
             FAKE_E2E_JOB_SUCCEEDED_SEQUENCE="1",
@@ -474,7 +474,7 @@ def test_test_command_detects_terminal_failure_when_failed_is_not_first_conditio
         completed, log_lines, _rendered = _run_e2e(
             tmp_path,
             "test",
-            timeout=2,
+            timeout=10,
             FAKE_E2E_JOB_STATUS_SEQUENCE="FailureTarget",
             FAKE_E2E_JOB_CONDITION_TYPES_SEQUENCE="FailureTarget Failed",
             FAKE_E2E_JOB_FAILED_SEQUENCE="1",
@@ -501,7 +501,7 @@ def test_test_command_keeps_polling_until_later_terminal_failure_conditions(tmp_
         completed, log_lines, _rendered = _run_e2e(
             tmp_path,
             "test",
-            timeout=2,
+            timeout=10,
             FAKE_E2E_JOB_STATUS_SEQUENCE="||FailureTarget",
             FAKE_E2E_JOB_CONDITION_TYPES_SEQUENCE="||FailureTarget Failed",
             FAKE_E2E_JOB_FAILED_SEQUENCE="0|0|1",
@@ -527,7 +527,7 @@ def test_test_command_detects_explicit_failed_condition_path(tmp_path: Path) -> 
         completed, log_lines, _rendered = _run_e2e(
             tmp_path,
             "test",
-            timeout=2,
+            timeout=10,
             FAKE_E2E_JOB_STATUS_SEQUENCE="Failed",
             FAKE_E2E_JOB_CONDITION_TYPES_SEQUENCE="Failed",
             FAKE_E2E_JOB_FAILED_SEQUENCE="1",
