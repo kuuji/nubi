@@ -1,0 +1,15 @@
+{
+  "decision": "approve",
+  "summary": "Implementation of post_pipeline_summary function is complete and correct. All gates pass, comprehensive test coverage, proper security patterns.",
+  "pr_summary": "## Summary\n\nAdded a `post_pipeline_summary` function that posts a structured markdown comment on PRs summarizing the entire pipeline run.\n\n### What changed\n- `src/nubi/tools/github_api.py`: New `post_pipeline_summary` function (+340 lines) that reads pipeline artifacts and posts formatted PR comments\n- `src/nubi/monitor_entrypoint.py`: Integrated the function call after audit submission (+12 lines)\n- `tests/tools/test_github_api.py`: Comprehensive test suite for formatting and posting (+334 lines)\n\n### Key implementation decisions\n- Reads four artifact files (result.json, gates.json, review.json, monitor.json) from the task branch via GitHub API\n- Formats pipeline data into markdown tables with emoji indicators for each stage\n- Uses `<!-- nubi-pipeline-summary -->` HTML marker to find and update existing comments on retries\n- Gracefully handles missing data (shows \"Skipped\" for missing stages)\n- Returns descriptive status strings for logging\n\n### Validation\n- All 5 gates passed: ruff (lint+format), mypy, pytest (521 tests), diff_size\n- 12 new unit tests covering formatting and posting scenarios\n- 521 total repository tests pass\n- Reviewer: Approved with positive assessment of correctness, security, and test coverage\n\n### Caveats\n- Design doc mentioned collapsible `<details>` sections for failed gate attempts (not included but not required)\n- Monitor.json artifact not present in branch (expected since monitor is writing it)",
+  "concerns": [
+    {
+      "severity": "minor",
+      "area": "output",
+      "description": "Design doc mentions collapsible <details> sections for failed gate attempts, which isn't implemented. Minor enhancement not required by task."
+    }
+  ],
+  "pr_url": "https://github.com/kuuji/nubi/pull/22",
+  "ci_status": "",
+  "ci_feedback": ""
+}
