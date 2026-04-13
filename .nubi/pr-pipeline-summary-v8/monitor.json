@@ -1,0 +1,9 @@
+{
+  "decision": "escalate",
+  "summary": "CI checks timed out — needs human investigation",
+  "pr_summary": "",
+  "concerns": [],
+  "pr_url": "https://github.com/kuuji/nubi/pull/21",
+  "ci_status": "timed_out",
+  "ci_feedback": "CI checks did not complete within 600s"
+}
