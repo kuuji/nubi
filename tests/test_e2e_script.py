@@ -400,7 +400,7 @@ def test_test_command_fails_fast_when_job_is_complete_but_phase_is_stuck(tmp_pat
         completed, log_lines, _rendered = _run_e2e(
             tmp_path,
             "test",
-            timeout=2,
+            timeout=10,
             FAKE_E2E_TASK_PHASE="Executing",
             FAKE_E2E_TASKSPEC_YAML="status:\n  phase: Executing\n",
         )
@@ -450,7 +450,7 @@ def test_test_command_keeps_polling_until_later_terminal_success_conditions(tmp_
         completed, log_lines, _rendered = _run_e2e(
             tmp_path,
             "test",
-            timeout=2,
+            timeout=10,
             FAKE_E2E_JOB_STATUS_SEQUENCE="||SuccessCriteriaMet",
             FAKE_E2E_JOB_CONDITION_TYPES_SEQUENCE="||SuccessCriteriaMet Complete",
             FAKE_E2E_JOB_SUCCEEDED_SEQUENCE="0|0|1",

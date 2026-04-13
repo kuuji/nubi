@@ -14,6 +14,7 @@ from nubi.agents.gate_result import (
 
 
 class TestDiscoverGates:
+    @patch("nubi.tools.verification_parser.parse_verification_commands", return_value=None)
     @patch("nubi.tools.gates.subprocess.run")
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
@@ -24,6 +25,7 @@ class TestDiscoverGates:
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
+        mock_parser: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
 
@@ -45,6 +47,7 @@ class TestDiscoverGates:
         assert any(d.category == GateCategory.LINT for d in result)
         assert any(d.category == GateCategory.TEST for d in result)
 
+    @patch("nubi.tools.verification_parser.parse_verification_commands", return_value=None)
     @patch("nubi.tools.gates.subprocess.run")
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
@@ -55,6 +58,7 @@ class TestDiscoverGates:
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
+        mock_parser: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
 
@@ -74,6 +78,7 @@ class TestDiscoverGates:
         mock_node.assert_called_once()
         assert any(d.category == GateCategory.LINT for d in result)
 
+    @patch("nubi.tools.verification_parser.parse_verification_commands", return_value=None)
     @patch("nubi.tools.gates.subprocess.run")
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
@@ -84,6 +89,7 @@ class TestDiscoverGates:
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
+        mock_parser: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
 
@@ -103,6 +109,7 @@ class TestDiscoverGates:
         assert not any(d.category == GateCategory.LINT for d in result)
         assert any(d.category == GateCategory.TEST for d in result)
 
+    @patch("nubi.tools.verification_parser.parse_verification_commands", return_value=None)
     @patch("nubi.tools.gates.subprocess.run")
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
@@ -113,6 +120,7 @@ class TestDiscoverGates:
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
+        mock_parser: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
 
@@ -132,6 +140,7 @@ class TestDiscoverGates:
         assert not any(d.category == GateCategory.LINT for d in result)
         assert any(d.category == GateCategory.TEST for d in result)
 
+    @patch("nubi.tools.verification_parser.parse_verification_commands", return_value=None)
     @patch("nubi.tools.gates.subprocess.run")
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
@@ -142,6 +151,7 @@ class TestDiscoverGates:
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
+        mock_parser: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
 
@@ -157,6 +167,7 @@ class TestDiscoverGates:
 
         assert any(d.category == GateCategory.DIFF_SIZE for d in result)
 
+    @patch("nubi.tools.verification_parser.parse_verification_commands", return_value=None)
     @patch("nubi.tools.gates.subprocess.run")
     @patch("nubi.tools.gates._discover_python_gates")
     @patch("nubi.tools.gates._discover_node_gates")
@@ -167,6 +178,7 @@ class TestDiscoverGates:
         mock_node: MagicMock,
         mock_python: MagicMock,
         mock_subprocess: MagicMock,
+        mock_parser: MagicMock,
     ) -> None:
         from nubi.tools.gates import discover_gates
 
