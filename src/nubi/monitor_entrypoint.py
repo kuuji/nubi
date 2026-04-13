@@ -5,7 +5,9 @@ from __future__ import annotations
 import base64
 import logging
 import os
+import signal
 import sys
+import threading
 
 from nubi.agents.monitor import create_monitor_agent
 from nubi.agents.monitor_result import MonitorDecision, MonitorResult
@@ -34,6 +36,17 @@ _MONITOR_TOOLS = [read_branch_file, read_diff, list_branch_files, submit_audit]
 def main() -> int:
     """Run the monitor agent end-to-end. Always returns 0 (graceful degradation)."""
     logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+
+    timeout = int(os.environ.get("NUBI_TIMEOUT", "0"))
+    if timeout > 0:
+
+        def _timeout_handler() -> None:
+            logger.error("Monitor timed out after %ds", timeout)
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        timer = threading.Timer(timeout, _timeout_handler)
+        timer.daemon = True
+        timer.start()
 
     try:
         task_id = os.environ["NUBI_TASK_ID"]

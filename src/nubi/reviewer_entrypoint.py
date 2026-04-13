@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
 import subprocess
 import sys
+import threading
 
 from nubi.agents.review_result import ReviewDecision, ReviewResult, write_review_result
 from nubi.agents.reviewer import create_reviewer_agent
@@ -19,6 +21,17 @@ logger = logging.getLogger(__name__)
 def main() -> int:
     """Run the reviewer agent end-to-end."""
     logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+
+    timeout = int(os.environ.get("NUBI_TIMEOUT", "0"))
+    if timeout > 0:
+
+        def _timeout_handler() -> None:
+            logger.error("Reviewer timed out after %ds", timeout)
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        timer = threading.Timer(timeout, _timeout_handler)
+        timer.daemon = True
+        timer.start()
 
     workspace = os.environ.get("NUBI_WORKSPACE", "/workspace")
     task_id = os.environ["NUBI_TASK_ID"]
