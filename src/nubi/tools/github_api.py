@@ -610,7 +610,7 @@ def _find_existing_pipeline_comment(pr_number: int) -> int | None:
         return None
     for comment in resp.json():
         if "<!-- nubi-pipeline-summary -->" in comment.get("body", ""):
-            return comment["id"]
+            return int(comment["id"])
     return None
 
 
