@@ -448,9 +448,7 @@ def _build_pipeline_summary_markdown(
     lines: list[str] = []
 
     lines.append("## Nubi Pipeline Summary\n")
-    lines.append(
-        f"**Task:** `{task_id}` · **Branch:** `{_task_branch}`"
-    )
+    lines.append(f"**Task:** `{task_id}` · **Branch:** `{_task_branch}`")
     lines.append("")
 
     # ---- Executor ----
@@ -462,8 +460,9 @@ def _build_pipeline_summary_markdown(
         commit = result_data.get("commit_sha", "")
         commit_short = commit[:7] if commit else "N/A"
         summary_text = result_data.get("summary", "")
-        lines.append(f"| Status | {_status_emoji(status_val)} "
-                     f"{_human_readable_status(status_val)} |")
+        lines.append(
+            f"| Status | {_status_emoji(status_val)} {_human_readable_status(status_val)} |"
+        )
         lines.append(f"| Commit | `{commit_short}` |")
         lines.append(f"| Summary | {summary_text} |")
     else:
@@ -502,8 +501,7 @@ def _build_pipeline_summary_markdown(
         feedback = review_data.get("feedback", "")
         if feedback and len(feedback) > 300:
             feedback = feedback[:300] + "..."
-        lines.append(f"| Decision | {_status_emoji(decision)} "
-                     f"{_human_readable_status(decision)} |")
+        lines.append(f"| Decision | {_status_emoji(decision)} {_human_readable_status(decision)} |")
         lines.append(f"| Feedback | {feedback} |")
     else:
         lines.append("| Decision | ⏭ Skipped |")
@@ -516,8 +514,7 @@ def _build_pipeline_summary_markdown(
     lines.append("|---|---|")
     if monitor_data:
         decision = monitor_data.get("decision", "unknown")
-        lines.append(f"| Decision | {_status_emoji(decision)} "
-                     f"{_human_readable_status(decision)} |")
+        lines.append(f"| Decision | {_status_emoji(decision)} {_human_readable_status(decision)} |")
     else:
         lines.append("| Decision | ❓ Not found |")
     ci_emoji = _status_emoji(ci_status) if ci_status else "❓"
