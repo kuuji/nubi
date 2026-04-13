@@ -365,9 +365,6 @@ def _gate_status_icon(status: str) -> str:
     return icons.get(status.lower(), "❓")
 
 
-
-
-
 def _find_existing_summary_comment(pr_number: int) -> dict[str, Any] | None:
     """Find an existing pipeline summary comment by marker."""
     url = f"{GITHUB_API_BASE}/repos/{_repo}/issues/{pr_number}/comments"
