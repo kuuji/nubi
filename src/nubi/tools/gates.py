@@ -22,7 +22,6 @@ from nubi.agents.gate_result import (
 
 logger = logging.getLogger(__name__)
 
-MAX_OUTPUT_LENGTH = 5000
 
 PYTHON_TOOLS: dict[str, list[str]] = {
     "lint": ["ruff", "ruff check"],
@@ -662,10 +661,9 @@ def _run_diff_size_gate(
 
 
 def _truncate_output(output: str) -> str:
-    """Truncate output to MAX_OUTPUT_LENGTH characters."""
-    if len(output) <= MAX_OUTPUT_LENGTH:
-        return output
-    return (
-        output[:MAX_OUTPUT_LENGTH]
-        + f"\n[truncated - {len(output) - MAX_OUTPUT_LENGTH} characters omitted]"
-    )
+    """Pass through gate output without truncation.
+
+    The full output is needed for the agent to diagnose failures.
+    Context window limits are handled at the LLM prompt level, not here.
+    """
+    return output
