@@ -240,7 +240,12 @@ def poll_ci_checks(
             time.sleep(poll_interval)
             continue
 
-        suites = resp.json().get("check_suites", [])
+        all_suites = resp.json().get("check_suites", [])
+        # Only consider GitHub Actions suites — other apps (e.g. Claude) may
+        # stay queued forever and block the poll.
+        suites = [
+            s for s in all_suites if s.get("app", {}).get("slug") == "github-actions"
+        ]
         if not suites:
             time.sleep(poll_interval)
             continue
