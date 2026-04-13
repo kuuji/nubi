@@ -18,6 +18,8 @@
 
 ## Backlog
 - [ ] MCP retry_task broken — `patch_namespaced_custom_object` gets unexpected `_content_type` kwarg. Likely kubernetes-asyncio API mismatch in the MCP k8s client wrapper.
+- [ ] Pod labels missing — executor/reviewer/monitor pods don't have `nubi.io/stage` label, so MCP `get_task_logs` can't find them. Labels are set on the Job metadata but not propagated to the Pod template.
+- [ ] Cancel should kill running pods — cancel annotation only sets phase to Cancelled, but running executor/reviewer/monitor jobs keep running. Should delete the active Job so the pod stops immediately.
 - [ ] Context management — needs more research. Subagent approach solved overflow but lost error detail. Scoped gates help. Open question.
 - [x] Deploy manifests — Kustomize base, MCP Dockerfile, split monolithic deployment.yaml (PR #6, done by nubi)
 - [x] Deploy to gitops-lab — ArgoCD Application pointing to kuuji/nubi/manifests/, cluster-specific secrets + ingress for MCP
