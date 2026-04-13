@@ -1,0 +1,11 @@
+{
+  "status": "success",
+  "commit_sha": "c9064feb97b0a9604355789aa497e37faa99b39e",
+  "summary": "Task completed with all gates passing",
+  "files_changed": [
+    "src/nubi/monitor_entrypoint.py",
+    "src/nubi/tools/github_api.py",
+    "tests/tools/test_github_api.py"
+  ],
+  "error": ""
+}
