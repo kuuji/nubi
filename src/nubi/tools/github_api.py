@@ -234,8 +234,9 @@ def _read_artifact_file(file_path: str) -> dict[str, Any] | None:
             return None
         data = resp.json()
         content_b64 = data.get("content", "")
-        content = base64.b64decode(content_b64).decode()
-        return json.loads(content)
+        file_content = base64.b64decode(content_b64).decode()
+        parsed: dict[str, Any] = json.loads(file_content)
+        return parsed
     except (json.JSONDecodeError, KeyError):
         return None
 
@@ -364,26 +365,7 @@ def _gate_status_icon(status: str) -> str:
     return icons.get(status.lower(), "❓")
 
 
-def _format_gate_details(gate: dict[str, Any]) -> str:
-    """Format a single gate result for the markdown table."""
-    status = gate.get("status", "unknown")
-    icon = _gate_status_icon(status)
-    output = gate.get("output", "")
 
-    # Truncate long output
-    details = output
-    if len(details) > 200:
-        details = details[:200] + "..."
-
-    # Add error info if present
-    error = gate.get("error", "")
-    if error and status == "failed":
-        if details:
-            details += f" ({error})"
-        else:
-            details = error[:200]
-
-    return f"{icon} {status}", details.strip()
 
 
 def _find_existing_summary_comment(pr_number: int) -> dict[str, Any] | None:
@@ -393,7 +375,7 @@ def _find_existing_summary_comment(pr_number: int) -> dict[str, Any] | None:
     if resp.status_code != 200:
         return None
 
-    comments = resp.json()
+    comments: list[dict[str, Any]] = resp.json()
     for comment in comments:
         if _PIPELINE_SUMMARY_MARKER in comment.get("body", ""):
             return comment
