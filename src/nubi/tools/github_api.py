@@ -676,7 +676,7 @@ def _find_existing_summary_comment(pr_number: int, repo: str, token: str) -> int
 
     for comment in resp.json():
         if PIPELINE_SUMMARY_MARKER in comment.get("body", ""):
-            return comment["id"]
+            return int(comment["id"])
     return None
 
 
