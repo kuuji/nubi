@@ -122,8 +122,6 @@ def run_gates(
     for disc in discovered:
         gate_result = _run_single_gate(disc, workspace, gate_policy, timeout)
         results.append(gate_result)
-        if gate_result.status == GateStatus.FAILED:
-            break
 
     all_passed = all(r.status == GateStatus.PASSED for r in results) and len(results) > 0
     skipped = [r.name for r in results if r.status == GateStatus.SKIPPED]

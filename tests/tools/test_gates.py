@@ -292,7 +292,8 @@ class TestRunGates:
         assert result.overall_passed is True
 
     @patch("nubi.tools.gates._run_single_gate")
-    def test_stops_on_failure(self, mock_run_single: MagicMock) -> None:
+    def test_runs_all_gates_even_on_failure(self, mock_run_single: MagicMock) -> None:
+        """All gates run so the agent sees every failure at once."""
         from nubi.tools.gates import run_gates
 
         mock_run_single.side_effect = [
@@ -307,7 +308,7 @@ class TestRunGates:
         policy = GatePolicy()
         result = run_gates(discovered, "/workspace", policy)
 
-        assert mock_run_single.call_count == 1
+        assert mock_run_single.call_count == 2
         assert result.overall_passed is False
 
     @patch("nubi.tools.gates._run_single_gate")
