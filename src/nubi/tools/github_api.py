@@ -6,7 +6,7 @@ import base64
 import json
 import logging
 import time
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from strands import tool
@@ -396,12 +396,13 @@ def _read_artifact(task_id: str, filename: str) -> dict[str, Any] | None:
         return None
     data = resp.json()
     content_b64 = data.get("content", "")
-    return json.loads(base64.b64decode(content_b64).decode())
+    # Cast needed because json.loads returns Any
+    return cast(dict[str, Any], json.loads(base64.b64decode(content_b64).decode()))
 
 
 def _gate_status_icon(status: str) -> str:
     """Return emoji icon for a gate status."""
-    mapping = {
+    mapping: dict[str, str] = {
         "passed": "✅ pass",
         "failed": "❌ fail",
         "skipped": "⏭ skipped",
@@ -411,15 +412,15 @@ def _gate_status_icon(status: str) -> str:
 
 def _gate_details(gate: dict[str, Any]) -> str:
     """Format gate output into a brief details string."""
-    status = gate.get("status", "")
-    output = gate.get("output", "")
-    error = gate.get("error", "")
+    status: str = gate.get("status", "")
+    output: str = gate.get("output", "")
+    error: str = gate.get("error", "")
 
     if error:
         return error[:200]
 
     if status == "skipped":
-        reason = gate.get("skipped_reason", "")
+        reason: str = gate.get("skipped_reason", "")
         return reason if reason else "skipped"
 
     if not output:
@@ -434,7 +435,7 @@ def _gate_details(gate: dict[str, Any]) -> str:
 
 def _decision_icon(decision: str) -> str:
     """Return emoji icon for a review/decision."""
-    mapping = {
+    mapping: dict[str, str] = {
         "approve": "✅ Approve",
         "flag": "⚠️ Flag",
         "reject": "❌ Reject",
@@ -445,7 +446,7 @@ def _decision_icon(decision: str) -> str:
 
 def _ci_status_icon(status: str) -> str:
     """Return emoji icon for CI status."""
-    mapping = {
+    mapping: dict[str, str] = {
         "success": "✅ All checks passed",
         "failure": "❌ Failed",
         "timed_out": "⏱ Timed out",
@@ -465,10 +466,11 @@ def _executor_status_display(status: str, error: str) -> str:
 
 def _format_executor(data: dict[str, Any]) -> str:
     """Format the executor section of the summary."""
-    status = data.get("status", "unknown")
-    commit_sha = data.get("commit_sha", "")[:8] if data.get("commit_sha") else "N/A"
-    summary = data.get("summary", "")
-    error = data.get("error", "")
+    status: str = data.get("status", "unknown")
+    commit_sha_raw: str = data.get("commit_sha", "")
+    commit_sha: str = commit_sha_raw[:8] if commit_sha_raw else "N/A"
+    summary: str = data.get("summary", "")
+    error: str = data.get("error", "")
 
     status_display = _executor_status_display(status, error)
     summary_display = summary if summary else error if error else ""
@@ -483,16 +485,16 @@ def _format_executor(data: dict[str, Any]) -> str:
 
 def _format_gates(data: dict[str, Any]) -> str:
     """Format the gates section of the summary."""
-    gates = data.get("gates", [])
+    gates: list[dict[str, Any]] = data.get("gates", [])
     if not gates:
         return "### Gates\n| | |\n|---|---|\n| Status | No gates run |"
 
     lines = ["### Gates", "| Gate | Result | Details |", "|---|---|---|"]
 
     for gate in gates:
-        name = gate.get("name", "?")
-        status = gate.get("status", "unknown")
-        icon = _gate_status_icon(status)
+        name: str = gate.get("name", "?")
+        gate_status: str = gate.get("status", "unknown")
+        icon = _gate_status_icon(gate_status)
         details = _gate_details(gate)
         details_truncated = details[:100] + "..." if len(details) > 100 else details
         lines.append(f"| {name} | {icon} | {details_truncated} |")
@@ -508,8 +510,8 @@ def _format_reviewer(data: dict[str, Any] | None) -> str:
 |---|---|
 | Decision | ⏭ Skipped |"""
 
-    decision = data.get("decision", "unknown")
-    feedback = data.get("feedback", "")
+    decision: str = data.get("decision", "unknown")
+    feedback: str = data.get("feedback", "")
     icon = _decision_icon(decision)
 
     # Truncate feedback if too long
@@ -527,7 +529,7 @@ def _format_monitor(data: dict[str, Any] | None, ci_status: str = "") -> str:
     if data is None:
         return "### Monitor\n| | |\n|---|---|\n| Decision | ⏭ Skipped |"
 
-    decision = data.get("decision", "unknown")
+    decision: str = data.get("decision", "unknown")
     icon = _decision_icon(decision)
     ci_icon = _ci_status_icon(ci_status) if ci_status else ""
 
@@ -559,7 +561,7 @@ def format_pipeline_summary(
         monitor_data: The monitor.json artifact data.
         ci_status: CI check status string.
     """
-    lines = [
+    lines: list[str] = [
         "## Nubi Pipeline Summary",
         "",
         f"**Task:** `{task_id}` · **Branch:** `{branch}`",
@@ -605,8 +607,10 @@ def _find_existing_summary_comment(pr_number: int) -> int | None:
         return None
 
     for comment in resp.json():
-        if PIPELINE_SUMMARY_MARKER in comment.get("body", ""):
-            return comment["id"]
+        body: str = comment.get("body", "")
+        if PIPELINE_SUMMARY_MARKER in body:
+            comment_id: int = comment["id"]
+            return comment_id
     return None
 
 
@@ -682,7 +686,8 @@ def post_pipeline_summary(
     # Get CI status from monitor data if available
     ci_status = ""
     if monitor_data:
-        ci_status = monitor_data.get("ci_status", "")
+        ci_status_arg: str = monitor_data.get("ci_status", "")
+        ci_status = ci_status_arg
 
     # Format the summary
     body = format_pipeline_summary(
