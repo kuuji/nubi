@@ -18,6 +18,7 @@ from nubi.tools.github_api import (
     list_branch_files,
     mark_pr_ready,
     poll_ci_checks,
+    post_pipeline_summary,
     read_branch_file,
     read_diff,
     submit_audit,
@@ -165,6 +166,22 @@ def main() -> int:
 
         # Write result to branch
         write_monitor_result_to_branch(audit)
+
+        # Post pipeline summary comment on the PR
+        if pr_url:
+            try:
+                summary_ok = post_pipeline_summary(
+                    pr_url=pr_url,
+                    repo=repo,
+                    branch=task_branch,
+                    token=token,
+                )
+                if summary_ok:
+                    logger.info("Pipeline summary comment posted on PR")
+                else:
+                    logger.warning("Failed to post pipeline summary comment")
+            except Exception:
+                logger.exception("Error posting pipeline summary comment")
 
         logger.info(
             "Monitor completed: decision=%s summary=%s",
