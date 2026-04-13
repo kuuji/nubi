@@ -61,5 +61,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+pythonpath = ["src"]
 markers = ["integration: requires k3d cluster (deselect with -m 'not integration')"]
 testpaths = ["tests"]
