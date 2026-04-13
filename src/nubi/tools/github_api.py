@@ -586,9 +586,7 @@ def _build_reviewer_section(review_data: dict[str, Any] | None) -> str:
         if feedback:
             # Take first paragraph (first few sentences)
             feedback_lines = feedback.strip().split("\n")
-            first_para = " ".join(
-                line.strip() for line in feedback_lines if line.strip()
-            )
+            first_para = " ".join(line.strip() for line in feedback_lines if line.strip())
             if len(first_para) > 300:
                 first_para = first_para[:300] + "..."
             lines.append(f"| Feedback | {first_para} |")
@@ -702,9 +700,7 @@ def _post_new_comment(pr_number: int, repo: str, token: str, body: str) -> bool:
     return False
 
 
-def _update_existing_comment(
-    comment_id: int, repo: str, token: str, body: str
-) -> bool:
+def _update_existing_comment(comment_id: int, repo: str, token: str, body: str) -> bool:
     """Update an existing PR comment."""
     url = f"{GITHUB_API_BASE}/repos/{repo}/issues/comments/{comment_id}"
     resp = httpx.patch(

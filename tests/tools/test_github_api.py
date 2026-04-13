@@ -70,9 +70,7 @@ class TestUpdatePrFromUrl:
 class TestMarkPrReady:
     @patch("nubi.tools.github_api.httpx.post")
     @patch("nubi.tools.github_api.httpx.get")
-    def test_marks_ready_via_graphql(
-        self, mock_get: MagicMock, mock_post: MagicMock
-    ) -> None:
+    def test_marks_ready_via_graphql(self, mock_get: MagicMock, mock_post: MagicMock) -> None:
         from nubi.tools.github_api import configure, mark_pr_ready
 
         configure(repo="kuuji/nubi", base_branch="main", task_branch="nubi/t1", token="tok")
@@ -93,9 +91,7 @@ class TestMarkPrReady:
 
     @patch("nubi.tools.github_api.httpx.post")
     @patch("nubi.tools.github_api.httpx.get")
-    def test_skips_on_pr_fetch_failure(
-        self, mock_get: MagicMock, mock_post: MagicMock
-    ) -> None:
+    def test_skips_on_pr_fetch_failure(self, mock_get: MagicMock, mock_post: MagicMock) -> None:
         from nubi.tools.github_api import configure, mark_pr_ready
 
         configure(repo="kuuji/nubi", base_branch="main", task_branch="nubi/t1", token="tok")
@@ -522,9 +518,7 @@ class TestPostPipelineSummary:
 
     @patch("nubi.tools.github_api._find_existing_summary_comment")
     @patch("nubi.tools.github_api._update_existing_comment")
-    def test_updates_existing_comment(
-        self, mock_update: MagicMock, mock_find: MagicMock
-    ) -> None:
+    def test_updates_existing_comment(self, mock_update: MagicMock, mock_find: MagicMock) -> None:
         mock_find.return_value = 12345
         mock_update.return_value = True
 
@@ -558,9 +552,7 @@ class TestPostPipelineSummary:
 
     @patch("nubi.tools.github_api._find_existing_summary_comment")
     @patch("nubi.tools.github_api._post_new_comment")
-    def test_reads_all_artifact_files(
-        self, mock_post: MagicMock, mock_find: MagicMock
-    ) -> None:
+    def test_reads_all_artifact_files(self, mock_post: MagicMock, mock_find: MagicMock) -> None:
         mock_find.return_value = None
         mock_post.return_value = True
 
