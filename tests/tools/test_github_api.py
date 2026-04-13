@@ -327,9 +327,7 @@ class TestPostPipelineSummary:
 
     @patch("nubi.tools.github_api._find_existing_pipeline_comment")
     @patch("nubi.tools.github_api._post_pr_comment")
-    def test_posts_new_comment(
-        self, mock_post: MagicMock, mock_find: MagicMock
-    ) -> None:
+    def test_posts_new_comment(self, mock_post: MagicMock, mock_find: MagicMock) -> None:
         """When no existing comment is found, posts a new one."""
         mock_find.return_value = None
         mock_post.return_value = True
@@ -350,9 +348,7 @@ class TestPostPipelineSummary:
 
     @patch("nubi.tools.github_api._find_existing_pipeline_comment")
     @patch("nubi.tools.github_api._update_pr_comment")
-    def test_updates_existing_comment(
-        self, mock_update: MagicMock, mock_find: MagicMock
-    ) -> None:
+    def test_updates_existing_comment(self, mock_update: MagicMock, mock_find: MagicMock) -> None:
         """When an existing comment is found, updates it instead of posting new."""
         mock_find.return_value = 123456
         mock_update.return_value = True
@@ -373,9 +369,7 @@ class TestPostPipelineSummary:
 
     @patch("nubi.tools.github_api._find_existing_pipeline_comment")
     @patch("nubi.tools.github_api._post_pr_comment")
-    def test_invalid_pr_url(
-        self, mock_post: MagicMock, mock_find: MagicMock
-    ) -> None:
+    def test_invalid_pr_url(self, mock_post: MagicMock, mock_find: MagicMock) -> None:
         """Invalid PR URL returns an error without API calls."""
         result = post_pipeline_summary(
             pr_url="not-a-url",

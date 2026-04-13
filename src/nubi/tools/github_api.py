@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import logging
 import time
+from contextlib import suppress
 from typing import Any
 
 import httpx
@@ -389,8 +390,9 @@ def _read_artifact_json(path: str) -> dict[str, Any] | None:
         if content.startswith("Error:"):
             return None
         import json
+        from typing import cast
 
-        return json.loads(content)
+        return cast(dict[str, Any], json.loads(content))
     except Exception:
         return None
 
@@ -527,9 +529,7 @@ def format_pipeline_summary_markdown(
 ) -> str:
     """Format the pipeline data into a markdown pipeline summary comment."""
     executor_sha = (
-        executor_result.commit_sha[:8]
-        if executor_result and executor_result.commit_sha
-        else ""
+        executor_result.commit_sha[:8] if executor_result and executor_result.commit_sha else ""
     )
 
     executor_md = _build_executor_section(executor_result, executor_sha)
@@ -578,7 +578,7 @@ def _find_existing_pipeline_comment(pr_number: int) -> int | None:
 
     for comment in resp.json():
         if _PIPELINE_SUMMARY_MARKER in comment.get("body", ""):
-            return comment["id"]
+            return int(comment["id"])
     return None
 
 
@@ -652,10 +652,8 @@ def post_pipeline_summary(
     # Parse into models
     executor_result: ExecutorResult | None = None
     if result_data:
-        try:
+        with suppress(Exception):
             executor_result = ExecutorResult.model_validate(result_data)
-        except Exception:
-            pass
 
     gates_result: GatesResult | None = None
     all_gates: list[dict[str, Any]] = []
@@ -668,17 +666,13 @@ def post_pipeline_summary(
 
     review_result: ReviewResult | None = None
     if review_data:
-        try:
+        with suppress(Exception):
             review_result = ReviewResult.model_validate(review_data)
-        except Exception:
-            pass
 
     monitor_result: MonitorResult | None = None
     if monitor_data:
-        try:
+        with suppress(Exception):
             monitor_result = MonitorResult.model_validate(monitor_data)
-        except Exception:
-            pass
 
     # Format markdown
     body = format_pipeline_summary_markdown(
