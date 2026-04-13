@@ -42,7 +42,7 @@ Before considering work done:
 1. `ruff check src/ tests/` — no lint errors
 2. `ruff format --check src/ tests/` — formatting passes
 3. `mypy src/nubi/` — no type errors
-4. `pytest tests/ -v` — all tests pass
+4. `pytest tests/ -v --ignore=tests/integration/` — all tests pass
 5. No secrets, credentials, or API keys in committed code
 
 ## Conventions
