@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 import time
 from typing import Any
@@ -10,11 +11,22 @@ from typing import Any
 import httpx
 from strands import tool
 
-from nubi.agents.monitor_result import MonitorConcern, MonitorDecision, MonitorResult
+from nubi.agents.gate_result import gates_file_path
+from nubi.agents.monitor_result import (
+    MonitorConcern,
+    MonitorDecision,
+    MonitorResult,
+    monitor_file_path,
+)
+from nubi.agents.result import result_file_path
+from nubi.agents.review_result import review_file_path
 
 logger = logging.getLogger(__name__)
 
 GITHUB_API_BASE = "https://api.github.com"
+
+# HTML marker used to identify and update pipeline summary comments
+_PIPELINE_SUMMARY_MARKER = "<!-- nubi-pipeline-summary -->"
 
 _repo: str = ""
 _base_branch: str = ""
@@ -213,6 +225,21 @@ def _task_id_from_branch() -> str:
     return _task_branch
 
 
+def _read_artifact_file(file_path: str) -> dict[str, Any] | None:
+    """Read a JSON artifact file from the task branch. Returns None if missing."""
+    try:
+        url = f"{GITHUB_API_BASE}/repos/{_repo}/contents/{file_path}"
+        resp = httpx.get(url, headers=_headers(), params={"ref": _task_branch}, timeout=30)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        content_b64 = data.get("content", "")
+        content = base64.b64decode(content_b64).decode()
+        return json.loads(content)
+    except (json.JSONDecodeError, KeyError):
+        return None
+
+
 def poll_ci_checks(
     timeout_seconds: int = 600,
     poll_interval: int = 30,
@@ -325,6 +352,308 @@ def write_monitor_result_to_branch(result: MonitorResult) -> bool:
         return True
     logger.error("Failed to write monitor result: %d %s", put_resp.status_code, put_resp.text)
     return False
+
+
+def _gate_status_icon(status: str) -> str:
+    """Return emoji icon for a gate status."""
+    icons = {
+        "passed": "✅",
+        "failed": "❌",
+        "skipped": "⏭",
+    }
+    return icons.get(status.lower(), "❓")
+
+
+def _format_gate_details(gate: dict[str, Any]) -> str:
+    """Format a single gate result for the markdown table."""
+    status = gate.get("status", "unknown")
+    icon = _gate_status_icon(status)
+    output = gate.get("output", "")
+
+    # Truncate long output
+    details = output
+    if len(details) > 200:
+        details = details[:200] + "..."
+
+    # Add error info if present
+    error = gate.get("error", "")
+    if error and status == "failed":
+        if details:
+            details += f" ({error})"
+        else:
+            details = error[:200]
+
+    return f"{icon} {status}", details.strip()
+
+
+def _find_existing_summary_comment(pr_number: int) -> dict[str, Any] | None:
+    """Find an existing pipeline summary comment by marker."""
+    url = f"{GITHUB_API_BASE}/repos/{_repo}/issues/{pr_number}/comments"
+    resp = httpx.get(url, headers=_headers(), timeout=30)
+    if resp.status_code != 200:
+        return None
+
+    comments = resp.json()
+    for comment in comments:
+        if _PIPELINE_SUMMARY_MARKER in comment.get("body", ""):
+            return comment
+    return None
+
+
+def _post_comment(pr_number: int, body: str, existing_comment_id: int | None = None) -> bool:
+    """Post or update a PR comment. Returns True on success."""
+    if existing_comment_id is not None:
+        # Update existing comment
+        url = f"{GITHUB_API_BASE}/repos/{_repo}/issues/comments/{existing_comment_id}"
+        resp = httpx.patch(url, headers=_headers(), json={"body": body}, timeout=30)
+    else:
+        # Create new comment
+        url = f"{GITHUB_API_BASE}/repos/{_repo}/issues/{pr_number}/comments"
+        resp = httpx.post(url, headers=_headers(), json={"body": body}, timeout=30)
+
+    if resp.status_code in (200, 201):
+        return True
+    logger.error("Failed to post PR comment: %d %s", resp.status_code, resp.text)
+    return False
+
+
+def _build_executor_section(executor_data: dict[str, Any] | None) -> str:
+    """Build the Executor section of the pipeline summary."""
+    if executor_data is None:
+        return "### Executor\n| | |\n|---|---|\n| Status | ⏭ Skipped |\n"
+
+    status = executor_data.get("status", "unknown")
+    status_icon = "✅" if status == "success" else "❌"
+    commit_sha = executor_data.get("commit_sha", "")[:7]
+    summary = executor_data.get("summary", "")
+    attempts = executor_data.get("attempts", 1)
+
+    lines = [
+        "### Executor",
+        "| | |",
+        "|---|---|",
+        f"| Status | {status_icon} {status.capitalize()} |",
+        f"| Attempts | {attempts} |",
+    ]
+    if commit_sha:
+        lines.append(f"| Commit | `{commit_sha}` |")
+    if summary:
+        lines.append(f"| Summary | {summary[:500]} |")
+
+    return "\n".join(lines) + "\n"
+
+
+def _build_gates_section(gates_data: dict[str, Any] | None) -> str:
+    """Build the Gates section of the pipeline summary."""
+    if gates_data is None:
+        return "### Gates\n| | |\n|---|---|\n| Status | ⏭ Skipped |\n"
+
+    lines = [
+        "### Gates",
+        "| Gate | Result | Details |",
+        "|---|---|---|",
+    ]
+
+    gates = gates_data.get("gates", [])
+    if not gates:
+        lines.append("| — | ⏭ No gates run | — |")
+    else:
+        for gate in gates:
+            gate_name = gate.get("name", "unknown")
+            status = gate.get("status", "unknown")
+            icon = _gate_status_icon(status)
+            output = gate.get("output", "")
+
+            # Create a concise details string
+            details = output.strip() if output else ""
+            if len(details) > 100:
+                details = details[:100] + "..."
+            if not details:
+                error = gate.get("error", "")
+                if error:
+                    details = error[:100]
+            if not details:
+                details = "—"
+
+            lines.append(f"| {gate_name} | {icon} {status} | {details} |")
+
+    # Add attempt info if multiple attempts
+    attempt = gates_data.get("attempt", 1)
+    if attempt > 1:
+        lines.append(f"\n*Attempt {attempt}*")
+
+    return "\n".join(lines) + "\n"
+
+
+def _build_reviewer_section(review_data: dict[str, Any] | None) -> str:
+    """Build the Reviewer section of the pipeline summary."""
+    if review_data is None:
+        return "### Reviewer\n| | |\n|---|---|\n| Decision | ⏭ Skipped |\n"
+
+    decision = review_data.get("decision", "unknown")
+    feedback = review_data.get("feedback", "")
+
+    if decision == "approve":
+        icon = "✅"
+    elif decision == "request-changes":
+        icon = "🔄"
+    elif decision == "reject":
+        icon = "❌"
+    else:
+        icon = "❓"
+
+    lines = [
+        "### Reviewer",
+        "| | |",
+        "|---|---|",
+        f"| Decision | {icon} {decision} |",
+    ]
+
+    if feedback:
+        # Truncate feedback
+        fb = feedback[:500]
+        if len(feedback) > 500:
+            fb += "..."
+        lines.append(f"| Feedback | {fb} |")
+
+    return "\n".join(lines) + "\n"
+
+
+def _build_monitor_section(monitor_data: dict[str, Any] | None, ci_status: str) -> str:
+    """Build the Monitor section of the pipeline summary."""
+    lines = [
+        "### Monitor",
+        "| | |",
+        "|---|---|",
+    ]
+
+    if monitor_data is None:
+        lines.append("| Decision | ⏭ Skipped |")
+    else:
+        decision = monitor_data.get("decision", "unknown")
+        if decision == "approve":
+            icon = "✅"
+        elif decision == "flag":
+            icon = "⚠️"
+        elif decision == "ci-failed":
+            icon = "❌"
+        elif decision == "escalate":
+            icon = "🔺"
+        else:
+            icon = "❓"
+        lines.append(f"| Decision | {icon} {decision} |")
+
+    # CI status
+    if ci_status == "success":
+        ci_icon = "✅"
+    elif ci_status in ("failure", "timed_out"):
+        ci_icon = "❌"
+    else:
+        ci_icon = "⏳"
+    lines.append(f"| CI Status | {ci_icon} {ci_status} |")
+
+    return "\n".join(lines) + "\n"
+
+
+def _format_pipeline_summary(
+    task_id: str,
+    executor_data: dict[str, Any] | None,
+    gates_data: dict[str, Any] | None,
+    review_data: dict[str, Any] | None,
+    monitor_data: dict[str, Any] | None,
+    ci_status: str,
+) -> str:
+    """Format the complete pipeline summary markdown."""
+    lines = [
+        "## Nubi Pipeline Summary",
+        "",
+        f"**Task:** `{task_id}` · **Branch:** `{_task_branch}`",
+        "",
+        _build_executor_section(executor_data),
+        _build_gates_section(gates_data),
+        _build_reviewer_section(review_data),
+        _build_monitor_section(monitor_data, ci_status),
+        "---",
+        "*Generated by [Nubi](https://github.com/kuuji/nubi) · "
+        "[pipeline artifacts](.nubi/" + f"{task_id}/)*",
+        "",
+        _PIPELINE_SUMMARY_MARKER,
+    ]
+
+    return "\n".join(lines)
+
+
+def post_pipeline_summary(pr_url: str, repo: str, branch: str, token: str) -> bool:
+    """Post a structured pipeline summary comment on a PR.
+
+    Reads the four artifact files (result.json, gates.json, review.json,
+    monitor.json) from the task branch and formats them into a markdown
+    comment summarizing the entire pipeline run.
+
+    On retries, finds and updates an existing comment using an HTML marker.
+
+    Args:
+        pr_url: The GitHub PR URL.
+        repo: Repository in "owner/name" format.
+        branch: The task branch name (e.g., "nubi/task-id").
+        token: GitHub API token.
+
+    Returns:
+        True on success, False on failure.
+    """
+    # Extract PR number from URL
+    pr_number = _pr_number_from_url(pr_url)
+    if pr_number is None:
+        logger.error("Could not extract PR number from URL: %s", pr_url)
+        return False
+
+    global _repo, _task_branch, _token
+
+    # Configure module-level state for artifact reading
+    old_repo = _repo
+    old_branch = _task_branch
+    old_token = _token
+
+    try:
+        _repo = repo
+        _task_branch = branch
+        _token = token
+
+        task_id = _task_id_from_branch()
+
+        # Read all artifact files
+        executor_data = _read_artifact_file(result_file_path(task_id))
+        gates_data = _read_artifact_file(gates_file_path(task_id))
+        review_data = _read_artifact_file(review_file_path(task_id))
+        monitor_data = _read_artifact_file(monitor_file_path(task_id))
+
+        # Get CI status from monitor data or environment
+        ci_status = ""
+        if monitor_data:
+            ci_status = monitor_data.get("ci_status", "")
+
+        # Format the summary markdown
+        summary_body = _format_pipeline_summary(
+            task_id=task_id,
+            executor_data=executor_data,
+            gates_data=gates_data,
+            review_data=review_data,
+            monitor_data=monitor_data,
+            ci_status=ci_status,
+        )
+
+        # Check for existing comment to update
+        existing_comment = _find_existing_summary_comment(pr_number)
+        existing_comment_id = existing_comment["id"] if existing_comment else None
+
+        # Post or update the comment
+        return _post_comment(pr_number, summary_body, existing_comment_id)
+
+    finally:
+        # Restore previous state
+        _repo = old_repo
+        _task_branch = old_branch
+        _token = old_token
 
 
 @tool
